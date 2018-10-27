@@ -161,22 +161,22 @@ class appDCM:
             print("register screen created successfully")
             return True
 
-    def checkRowValue(self, row):
-        if not (row=="top" or row=="mid" or row=="bot"):
+    def checkRowValue(self, rowValue):
+        if not (rowValue=="top" or rowValue=="mid" or rowValue=="bot"):
             raise ValueError('<row> value must be either "top", "mid", or "bot"')
         else:
-            if (row=="top"):
+            if (rowValue=="top"):
                 return 0
-            if (row=="bot"):
+            if (rowValue=="bot"):
                 return 2
             return 1 #return mid
 
-    def displayScreen(self, screenName, row="mid"):
-        self.checkRowValue(row)
-        if self.screenDictionary.get(row) is not None:
-            self.screenDictionary[row].grid_forget()
-        self.screenDictionary[row] = self.screenDictionary[screenName]
-        self.screenDictionary[row].grid(row=self.checkRowValue(row), column=0, sticky=W+E+N+S)
+    def displayScreen(self, screenName, rowValue="mid"):
+        self.checkRowValue(rowValue)
+        if self.screenDictionary.get(rowValue) is not None:
+            self.screenDictionary[rowValue].grid_forget()
+        self.screenDictionary[rowValue] = self.screenDictionary[screenName]
+        self.screenDictionary[rowValue].grid(row=self.checkRowValue(rowValue), column=0, sticky=W+E+N+S)
         self.rootWindowResize()
 
     def rootWindowResize(self):
@@ -192,15 +192,30 @@ class appDCM:
             json.dump("", fileOut)
             print("create defaultUser.json file")
 
-##    def 
-
-    def readDefaultUser(self):
+    def checkUserDirectory(self):
         self.userDirectory = "./user"
         self.userloginFile = "/userlogin.json"
+        self.jsonUserlogin = {}
         if not os.path.exists(self.userDirectory):
-            os.mkdir(self.userDirectory)
             print("make "+self.userDirectory+" subdirectory")
-##        if not os.path.isfile(self.userDirectory+self.userloginFile):
+            os.mkdir(self.userDirectory)
+            
+        with open(self.userDirectory+self.userloginFile, "w+") as fileIO:
+            print("create "+self.userloginFile+" file")
+            try:
+                self.jsonUserlogin = json.load(fileIO)
+                if "default" not in self.jsonUserlogin:
+                    self.jsonUserlogin["default"] = ""
+            except:
+                self.jsonUserlogin["default"] = ""
+            json.dump(self.jsonUserlogin, fileIO)
+
+    def readDefaultUser(self):
+        self.checkUserDirectory()
+        self.userDirectory = "./user"
+        self.userloginFile = "/userlogin.json"
+##        with open(self.userDirectory+self.userloginFile, "r") as fileIn:
+##            self.jsonUserlogin = json.load(fileIn)
 
 
             
@@ -211,4 +226,4 @@ class appDCM:
 
             
 login = appDCM()
-##login.createDefaultUser()
+login.readDefaultUser()
