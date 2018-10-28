@@ -1,12 +1,23 @@
 from tkinter import *
 from tkinter import ttk
+from tkinter import messagebox
 import json
 import os
+import base64
 
 class appDCM:
     #create dictionary
     screenDictionary = {"top":None, "mid":None, "bot":None}
     fontDictionary = {}
+
+    #image file and directory
+    imageDirectory = "./images"
+    logoFile = "/MacFireball.png"
+
+    #userdata file and directory
+    userDirectory = "./user"
+    userloginFile = "/userlogin.json"
+    jsonUserlogin = {}
     
     def __init__(self):
         #create new window ================================
@@ -20,8 +31,62 @@ class appDCM:
         self.createHeaderScreen()
         self.createLogoScreen()
 
+        #check and fix user database
+        self.checkUserDirectory() #should be called before createLoginScreen()
+        
         #create login screen
         self.createLoginScreen()
+
+    def checkUserDirectory(self, defaultUsername=""): #check, set, and return default username
+        self.jsonUserlogin = {}
+        if not os.path.exists(self.userDirectory): #check if subdirectory exist
+            print("make "+self.userDirectory+" subdirectory")
+            os.mkdir(self.userDirectory)
+
+        if os.path.isfile(self.userDirectory+self.userloginFile): #check if userlogin file exist
+            with open(self.userDirectory+self.userloginFile, "r") as fileIn:
+                try:
+                    self.jsonUserlogin = json.load(fileIn) #try to load file data
+                    print("able to read .json file")
+                    if ("default" not in self.jsonUserlogin or not isinstance(self.jsonUserlogin["default"], str)):
+                        self.jsonUserlogin["default"] = defaultUsername
+                except: #file is corrupted or not in .json format
+                    print("cannot load .json file")
+                    self.jsonUserlogin["default"] = defaultUsername
+        else:
+            self.jsonUserlogin["default"] = defaultUsername
+        with open(self.userDirectory+self.userloginFile, "w") as fileOut:
+            json.dump(self.jsonUserlogin, fileOut) #set default username in .json file
+        return self.jsonUserlogin["default"] #return default username
+
+    def checkRowValue(self, rowValue):
+        if not (rowValue=="top" or rowValue=="mid" or rowValue=="bot"):
+            raise ValueError('<row> value must be either "top", "mid", or "bot"')
+        else:
+            if (rowValue=="top"):
+                return 0
+            if (rowValue=="bot"):
+                return 2
+            return 1 #return mid
+
+    def displayScreen(self, screenName, rowValue="mid"):
+        if screenName in self.screenDictionary:
+            self.checkRowValue(rowValue)
+            if self.screenDictionary.get(rowValue) is not None:
+                self.screenDictionary[rowValue].grid_forget()
+            self.screenDictionary[rowValue] = self.screenDictionary[screenName]
+            self.screenDictionary[rowValue].grid(row=self.checkRowValue(rowValue), column=0, sticky=W+E+N+S)
+            self.rootWindowResize()
+            return True
+        else:
+            print(screenName+" does not exist")
+            return False
+
+    def rootWindowResize(self):
+        self.root.update()
+        self.root.minsize(self.root.winfo_reqwidth(), self.root.winfo_reqheight())
+        self.root.geometry('%dx%d' % (self.root.winfo_reqwidth(), self.root.winfo_reqheight()))
+        self.root.resizable(1, 1)
         
     def createFont(self, name, fontName, size, weight="normal"):
         self.fontDictionary[name] = (fontName, size, weight)
@@ -52,8 +117,8 @@ class appDCM:
             self.logoFrame.columnconfigure(0, weight=1)
             self.screenDictionary["logoScreen"] = self.logoFrame
 
-            if os.path.exists("./images"):
-                self.MacEngLogoImg = PhotoImage(file="./images/MacFireball.png").subsample(2, 2)
+            if os.path.exists(self.imageDirectory):
+                self.MacEngLogoImg = PhotoImage(file=self.imageDirectory+self.logoFile).subsample(2, 2)
                 self.MacEngLogoLabel = Label(self.logoFrame, image=self.MacEngLogoImg)
                 self.MacEngLogoLabel.grid(row=0, pady=5)
             
@@ -91,7 +156,7 @@ class appDCM:
             self.usernameEntry = ttk.Entry(self.loginFrame, font=self.fontDictionary["loginFont"])
             self.passwordEntry = ttk.Entry(self.loginFrame, font=self.fontDictionary["loginFont"], show="*")
 
-            self.loginButton = ttk.Button(self.loginFrame, text="Login", style="loginButton.TButton")
+            self.loginButton = ttk.Button(self.loginFrame, text="Login", style="loginButton.TButton", command=lambda:self.loginUser())
             self.rememberMeButton = ttk.Checkbutton(self.loginFrame, text="Remember Me")
             self.smallRegisterButton = ttk.Button(self.loginFrame, text="Register", command=lambda:self.createRegisterScreen())
             
@@ -105,9 +170,58 @@ class appDCM:
             self.rememberMeButton.grid(row=4, column=0, columnspan=2, sticky=W)
             self.smallRegisterButton.grid(row=4, column=1, columnspan=2, sticky=E)
 
+            #assign variable to entry
+            self.usernameStr = StringVar()
+            self.passwordStr = StringVar()
+            self.usernameEntry.configure(textvariable=self.usernameStr)
+            self.passwordEntry.configure(textvariable=self.passwordStr)
+
+            #check for Remember Me username
+            self.usernameStr.set(self.getUserData("default"))
+            if (self.usernameStr.get() == ""):
+                self.setButtonState(self.rememberMeButton, '!selected')
+            else:
+                self.setButtonState(self.rememberMeButton)
+
             self.displayScreen("loginScreen")
             print("login screen created successfully")
             return True
+
+    def passwordHiding(self, string):               
+        if not isinstance(string, str):
+            raise TypeError('<string> parameter must be type "str"')
+        else: #hide plain-text password by using base64 encode
+            return str(base64.b64encode(string.encode()))
+
+    def loginUser(self):
+        tempPassword = self.passwordHiding(self.passwordStr.get()) #temp value gets cleared when exit function
+        self.passwordStr.set("") #clear password entry for login safety
+
+        if (self.usernameStr.get() in self.jsonUserlogin and tempPassword == self.jsonUserlogin[self.usernameStr.get()]):
+            if not (self.rememberMeButton.state() == ()): #if button is checked
+                self.setUserData("default", self.usernameStr.get()) #remember username
+            else:
+                self.setUserData("default", "")
+                self.usernameStr.set("") #clear username entry
+            self.createProfileScreen()
+            self.createProgramScreen()
+        else:
+            messagebox.showerror("Login Error", "Invalid username or password")
+    
+    def getUserData(self, username):
+        with open(self.userDirectory+self.userloginFile, "r") as fileIn:
+            self.jsonUserlogin = json.load(fileIn)
+        return self.jsonUserlogin[username]
+
+    def setUserData(self, username, password):
+        self.jsonUserlogin[username] = password
+        with open(self.userDirectory+self.userloginFile, "w") as fileOut:
+            json.dump(self.jsonUserlogin, fileOut) #write to .json file
+    
+    def setButtonState(self, button, state='selected'):
+        if not ("alternate" in state):
+            button.state(['!alternate'])
+        button.state([state])
 
     def createRegisterScreen(self):
         if "registerScreen" in self.screenDictionary:
@@ -140,7 +254,7 @@ class appDCM:
             self.registerPasswordEntry = ttk.Entry(self.registerFrame, font=self.fontDictionary["loginFont"], show="*")
             self.registerPasswordReEntry = ttk.Entry(self.registerFrame, font=self.fontDictionary["loginFont"], show="*")
 
-            self.registerButton = ttk.Button(self.registerFrame, text="Create Account", style="loginButton.TButton")
+            self.registerButton = ttk.Button(self.registerFrame, text="Create Account", style="loginButton.TButton", command=lambda:self.registerUser())
             self.smallLoginLabel = Label(self.registerFrame, text="Already have an account?")
             self.smallLoginButton = ttk.Button(self.registerFrame, text="Login", command=lambda:self.createLoginScreen())
             
@@ -157,73 +271,82 @@ class appDCM:
             self.smallLoginLabel.grid(row=5, column=0, columnspan=2, sticky=W)
             self.smallLoginButton.grid(row=5, column=1, columnspan=2, sticky=E)
 
+            #assign variable to entry
+            self.registerUsernameStr = StringVar()
+            self.registerPasswordStr = StringVar()
+            self.registerPasswordReStr = StringVar()
+
+            self.registerUsernameEntry.configure(textvariable=self.registerUsernameStr)
+            self.registerPasswordEntry.configure(textvariable=self.registerPasswordStr)
+            self.registerPasswordReEntry.configure(textvariable=self.registerPasswordReStr)
+            
             self.displayScreen("registerScreen")
             print("register screen created successfully")
             return True
 
-    def checkRowValue(self, rowValue):
-        if not (rowValue=="top" or rowValue=="mid" or rowValue=="bot"):
-            raise ValueError('<row> value must be either "top", "mid", or "bot"')
+    def registerUser(self):
+        if (self.registerUsernameStr.get() in self.jsonUserlogin or self.registerUsernameStr.get() == "default"):
+            messagebox.showerror("Invalid username", "Username already exists")
+        elif (len(self.registerUsernameStr.get()) < 3 or 16 < len(self.registerUsernameStr.get())):
+            messagebox.showwarning("Invalid username", "Username must be 3 to 16 characters long")
+        elif (len(self.registerPasswordStr.get()) < 3 or 32 < len(self.registerPasswordStr.get())):
+            messagebox.showwarning("Invalid password", "Password must be 3 to 32 characters long")
+        elif (self.registerPasswordStr.get() == self.registerUsernameStr.get()):
+            messagebox.showwarning("Invalid password", "Password cannot be the same as username")
+        elif not (self.registerPasswordStr.get() == self.registerPasswordReStr.get()):
+            messagebox.showerror("Invalid password", "Retype Password does not match")
         else:
-            if (rowValue=="top"):
-                return 0
-            if (rowValue=="bot"):
-                return 2
-            return 1 #return mid
+            self.setUserData(self.registerUsernameStr.get(), self.passwordHiding(self.registerPasswordStr.get()))
+            self.registerUsernameStr.set("")
+            self.registerPasswordStr.set("")
+            self.registerPasswordReStr.set("")
+            messagebox.showinfo("Account created", "You can now login using that account")
 
-    def displayScreen(self, screenName, rowValue="mid"):
-        self.checkRowValue(rowValue)
-        if self.screenDictionary.get(rowValue) is not None:
-            self.screenDictionary[rowValue].grid_forget()
-        self.screenDictionary[rowValue] = self.screenDictionary[screenName]
-        self.screenDictionary[rowValue].grid(row=self.checkRowValue(rowValue), column=0, sticky=W+E+N+S)
-        self.rootWindowResize()
+    def createProgramScreen(self):
+        if "programScreen" in self.screenDictionary:
+            print("program screen already exist")
+            self.displayScreen("programScreen")
+            return False
+        else:
+            self.programFrame = Frame(self.root, padx=20, pady=10)
+            self.programFrame.columnconfigure(0, weight=1)
+            self.screenDictionary["programScreen"] = self.programFrame
 
-    def rootWindowResize(self):
-        self.root.update()
-        self.root.minsize(self.root.winfo_reqwidth(), self.root.winfo_reqheight())
-        self.root.geometry(str(self.root.winfo_reqwidth())+"x"+str(self.root.winfo_reqheight()))
-        self.root.resizable(1, 1)
+            #styling tk and ttk
+            self.createFont("programFont", "TkDefaultFont", 30, "bold")
 
-    def createDefaultUser(self, username=""):
-        self.userDirectory = "./user"
-        self.userloginFile = "/userlogin.json"
-        with open(self.userDirectory+self.userloginFile, "w") as fileOut:
-            json.dump("", fileOut)
-            print("create defaultUser.json file")
+            self.programTitle = Label(self.programFrame, text="Program Goes Here", font=self.fontDictionary["programFont"])
+            self.programTitle.grid(row=0)
 
-    def checkUserDirectory(self):
-        self.userDirectory = "./user"
-        self.userloginFile = "/userlogin.json"
-        self.jsonUserlogin = {}
-        if not os.path.exists(self.userDirectory):
-            print("make "+self.userDirectory+" subdirectory")
-            os.mkdir(self.userDirectory)
-            
-        with open(self.userDirectory+self.userloginFile, "w+") as fileIO:
-            print("create "+self.userloginFile+" file")
-            try:
-                self.jsonUserlogin = json.load(fileIO)
-                if "default" not in self.jsonUserlogin:
-                    self.jsonUserlogin["default"] = ""
-            except:
-                self.jsonUserlogin["default"] = ""
-            json.dump(self.jsonUserlogin, fileIO)
+            self.displayScreen("programScreen")
+            print("program screen created successfully")
+            return True
 
-    def readDefaultUser(self):
-        self.checkUserDirectory()
-        self.userDirectory = "./user"
-        self.userloginFile = "/userlogin.json"
-##        with open(self.userDirectory+self.userloginFile, "r") as fileIn:
-##            self.jsonUserlogin = json.load(fileIn)
+    def createProfileScreen(self):
+        if "profileScreen" in self.screenDictionary:
+            print("profile screen already exist")
+            self.displayScreen("profileScreen", "top")
+            return False
+        else:
+            self.profileFrame = Frame(self.root, padx=20, pady=10)
+            self.profileFrame.columnconfigure(0, weight=1)
+            self.screenDictionary["profileScreen"] = self.profileFrame
+
+            self.profileSoftwareName = Label(self.profileFrame, text="Pacemaker Controller-Monitor")
+            self.profileSoftwareName.grid(row=0, sticky=W)
+
+            self.profileButton = ttk.Button(self.profileFrame, text="Logout", command=lambda:self.logoutUser())
+            self.profileButton.grid(row=0, sticky=E)
+
+            self.displayScreen("profileScreen", "top")
+            print("profile screen created successfully")
+            return True
+
+    def logoutUser(self):
+        self.createLoginScreen()
+        self.createHeaderScreen()
 
 
-            
-        if os.path.isfile(self.userDirectory+self.userloginFile):
-            print("default.json file exists")
-            with open(self.userDirectory+self.userloginFile, "r") as fileIn:
-                self.jsonDefaultUser = json.load(fileIn)
 
             
 login = appDCM()
-login.readDefaultUser()
