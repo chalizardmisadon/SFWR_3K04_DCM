@@ -474,6 +474,13 @@ class appDCM:
             self.entry23.grid(row=3, column=5, sticky=W)
             self.entry24.grid(row=4, column=5, sticky=W)
             self.entry25.grid(row=5, column=5, sticky=W)
+
+            #confirm button
+            self.confirmButton = ttk.Button(self.paceSettingFrame, text="Confirm")
+            self.confirmButton.grid(row=11, column=4, padx=5, sticky=E)
+            self.resetButton = ttk.Button(self.paceSettingFrame, text="Reset Settings")
+            self.resetButton.grid(row=11, column=5, padx=5, sticky=W)
+
             
             #display screen
             self.displayScreen("programScreen")
