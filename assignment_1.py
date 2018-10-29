@@ -256,6 +256,7 @@ class appDCM:
             messagebox.showerror("Invalid password", "Retype Password does not match")
         else:
             self.setUserlogin(self.registerUsernameStr.get(), self.passwordHiding(self.registerPasswordStr.get()))
+            self.usernameStr.set(self.registerUsernameStr.get())
             self.registerUsernameStr.set("")
             self.registerPasswordStr.set("")
             self.registerPasswordReStr.set("")
