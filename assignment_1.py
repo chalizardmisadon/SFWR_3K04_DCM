@@ -6,21 +6,20 @@ import os
 import base64
 
 class appDCM:
-    #create dictionary
-    screenDictionary = {"top":None, "mid":None, "bot":None}
-    fontDictionary = {}
-
-    #image file and directory
+    #image file and directory ====================
     imageDirectory = "./images"
     logoFile = "/MacFireball.png"
 
-    #userdata file and directory
+    #userdata file and directory =================
     userDirectory = "./user"
     userloginFile = "/userlogin.json"
     jsonUserlogin = {}
     
     def __init__(self):
-        #create new window ================================
+        #pre-program check for necessary files and variables ==================
+        self.checkUserDirectory() #check and fix user database, must be called before createLoginScreen()
+        
+        #create new window =====================================================================================================================
         self.root = Tk()
         self.root.title("SFWR 3K04 - DCM")
         self.root.columnconfigure(0, weight=1)
@@ -30,13 +29,14 @@ class appDCM:
         #create header and logo
         self.createHeaderScreen()
         self.createLogoScreen()
-
-        #check and fix user database
-        self.checkUserDirectory() #should be called before createLoginScreen()
         
         #create login screen
         self.createLoginScreen()
 
+        #mainloop() makes code stuck in a "while (True)" loop
+        self.root.mainloop()
+
+    #user database related methods =============================================================================================================
     def checkUserDirectory(self, defaultUsername=""): #check, set, and return default username
         self.jsonUserlogin = {}
         if not os.path.exists(self.userDirectory): #check if subdirectory exist
@@ -59,7 +59,8 @@ class appDCM:
             json.dump(self.jsonUserlogin, fileOut) #set default username in .json file
         return self.jsonUserlogin["default"] #return default username
 
-    def checkRowValue(self, rowValue):
+    #screen display related methods ============================================================================================================
+    def checkRowValue(self, rowValue): #split window into 3 rows
         if not (rowValue=="top" or rowValue=="mid" or rowValue=="bot"):
             raise ValueError('<row> value must be either "top", "mid", or "bot"')
         else:
@@ -69,12 +70,23 @@ class appDCM:
                 return 2
             return 1 #return mid
 
-    def displayScreen(self, screenName, rowValue="mid"):
+    def checkScreenExist(self, screenName): #check if screen exist in dictionary
+        try:
+            return screenName in self.screenDictionary
+        except: #if dictionary does not yet exist
+            self.screenDictionary = {"top":None, "mid":None, "bot":None}
+            return False
+
+    def addScreen(self, screenName, frame):
+        if not self.checkScreenExist(screenName): #check for screen dictionary
+            self.screenDictionary[screenName] = frame
+
+    def displayScreen(self, screenName, rowValue="mid"): #display screen on window
         if screenName in self.screenDictionary:
             self.checkRowValue(rowValue)
-            if self.screenDictionary.get(rowValue) is not None:
+            if self.screenDictionary.get(rowValue) is not None: #check if row is occupied
                 self.screenDictionary[rowValue].grid_forget()
-            self.screenDictionary[rowValue] = self.screenDictionary[screenName]
+            self.screenDictionary[rowValue] = self.screenDictionary[screenName]  #set new screen
             self.screenDictionary[rowValue].grid(row=self.checkRowValue(rowValue), column=0, sticky=W+E+N+S)
             self.rootWindowResize()
             return True
@@ -82,42 +94,58 @@ class appDCM:
             print(screenName+" does not exist")
             return False
 
-    def rootWindowResize(self):
+    def rootWindowResize(self): #resize window according to current displayed screens
         self.root.update()
         self.root.minsize(self.root.winfo_reqwidth(), self.root.winfo_reqheight())
         self.root.geometry('%dx%d' % (self.root.winfo_reqwidth(), self.root.winfo_reqheight()))
         self.root.resizable(1, 1)
-        
+
+    #styling related methods =================================================================================================================
     def createFont(self, name, fontName, size, weight="normal"):
-        self.fontDictionary[name] = (fontName, size, weight)
-        
+        try:
+            self.fontDictionary[name] = (fontName, size, weight)
+        except: #if dictionary does not yet exist
+            self.fontDictionary = {}
+            self.fontDictionary[name] = (fontName, size, weight)
+
+    def ttkCreateFont(self, name, fontName, size, weight="normal"):
+        try:
+            self.ttkStyle.configure(name, font=(fontName, size, weight))
+        except: #if ttkStyle variable does not yet exist
+            self.ttkStyle = ttk.Style()
+            self.ttkStyle.configure(name, font=(fontName, size, weight))
+            
+
+    #login header screen =====================================================================================================================
     def createHeaderScreen(self):
-        if "headerScreen" in self.screenDictionary:
+        if self.checkScreenExist("headerScreen"):
             print("header screen already exist")
             self.displayScreen("headerScreen", "top")
             return False
         else:
             self.headerFrame = Frame(self.root, padx=20, pady=0)
-            self.screenDictionary["headerScreen"] = self.headerFrame
+            self.addScreen("headerScreen", self.headerFrame)
 
             self.headerSoftwareName = Label(self.headerFrame, text="Pacemaker Controller-Monitor")
             self.headerSoftwareName.grid(row=0, sticky=W)
 
+            #display screen
             self.displayScreen("headerScreen", "top")
             print("header screen created successfully")
             return True
-        
+
+    #logo screen =============================================================================================================================
     def createLogoScreen(self):
-        if "logoScreen" in self.screenDictionary:
+        if self.checkScreenExist("logoScreen"):
             print("logo screen already exist")
             self.displayScreen("logoScreen", "bot")
             return False
         else:
             self.logoFrame = Frame(self.root, padx=0, pady=10)
             self.logoFrame.columnconfigure(0, weight=1)
-            self.screenDictionary["logoScreen"] = self.logoFrame
+            self.addScreen("logoScreen", self.logoFrame)
 
-            if os.path.exists(self.imageDirectory):
+            if os.path.exists(self.imageDirectory): #if img directory exist
                 self.MacEngLogoImg = PhotoImage(file=self.imageDirectory+self.logoFile).subsample(2, 2)
                 self.MacEngLogoLabel = Label(self.logoFrame, image=self.MacEngLogoImg)
                 self.MacEngLogoLabel.grid(row=0, pady=5)
@@ -125,12 +153,14 @@ class appDCM:
             self.companyName = Label(self.logoFrame, text="Spontaneous Cardiac Arrest Ltd.")
             self.companyName.grid(row=1)
 
+            #display screen
             self.displayScreen("logoScreen", "bot")
             print("logo screen created successfully")
             return True
 
+    #login screen =============================================================================================================================
     def createLoginScreen(self):
-        if "loginScreen" in self.screenDictionary:
+        if self.checkScreenExist("loginScreen"):
             print("login screen already exist")
             self.displayScreen("loginScreen")
             return False
@@ -138,19 +168,16 @@ class appDCM:
             self.loginFrame = Frame(self.root, padx=20, pady=10)
             self.loginFrame.columnconfigure((1, 2), weight=1)
             self.loginFrame.rowconfigure((0, 1, 3), weight=1)
-            self.screenDictionary["loginScreen"] = self.loginFrame
-
-            #title widget
-            self.createFont("loginTitleFont", "TkDefaultFont", 30, "bold")
-            self.loginTitle = Label(self.loginFrame, text="Welcome Back", font=self.fontDictionary["loginTitleFont"], height=2)
-            self.loginTitle.grid(row=0, columnspan=3, sticky=N)
+            self.addScreen("loginScreen", self.loginFrame)
 
             #styling tk and ttk
+            self.createFont("loginTitleFont", "TkDefaultFont", 30, "bold")
             self.createFont("loginFont", "TkDefaultFont", 12)
-            self.ttkStyle = ttk.Style()
-            self.ttkStyle.configure("loginButton.TButton", font=("TkDefaultFont", 20, "bold"))
+            self.ttkCreateFont("loginButton.TButton", "TkDefaultFont", 20, "bold")
             
             #create widget
+            self.loginTitle = Label(self.loginFrame, text="Welcome Back", font=self.fontDictionary["loginTitleFont"], height=2)
+
             self.usernameLabel = Label(self.loginFrame, text="Username", font=self.fontDictionary["loginFont"])
             self.passwordLabel = Label(self.loginFrame, text="Password", font=self.fontDictionary["loginFont"])
             self.usernameEntry = ttk.Entry(self.loginFrame, font=self.fontDictionary["loginFont"])
@@ -161,6 +188,8 @@ class appDCM:
             self.smallRegisterButton = ttk.Button(self.loginFrame, text="Register", command=lambda:self.createRegisterScreen())
             
             #display widget
+            self.loginTitle.grid(row=0, columnspan=3, sticky=N)
+                        
             self.usernameLabel.grid(row=1, sticky=E+S)
             self.passwordLabel.grid(row=2, sticky=E+N)
             self.usernameEntry.grid(row=1, column=1, columnspan=2, padx=5, pady=2, sticky=W+E+S)
@@ -177,16 +206,18 @@ class appDCM:
             self.passwordEntry.configure(textvariable=self.passwordStr)
 
             #check for Remember Me username
-            self.usernameStr.set(self.getUserData("default"))
+            self.usernameStr.set(self.getUserlogin("default"))
             if (self.usernameStr.get() == ""):
                 self.setButtonState(self.rememberMeButton, '!selected')
             else:
                 self.setButtonState(self.rememberMeButton)
 
+            #display screen
             self.displayScreen("loginScreen")
             print("login screen created successfully")
             return True
 
+    #userlogin related methods ================================================================================================================
     def passwordHiding(self, string):               
         if not isinstance(string, str):
             raise TypeError('<string> parameter must be type "str"')
@@ -199,21 +230,40 @@ class appDCM:
 
         if (self.usernameStr.get() in self.jsonUserlogin and tempPassword == self.jsonUserlogin[self.usernameStr.get()]):
             if not (self.rememberMeButton.state() == ()): #if button is checked
-                self.setUserData("default", self.usernameStr.get()) #remember username
+                self.setUserlogin("default", self.usernameStr.get()) #remember username
             else:
-                self.setUserData("default", "")
+                self.setUserlogin("default", "")
                 self.usernameStr.set("") #clear username entry
-            self.createProfileScreen()
-            self.createProgramScreen()
+                
+            self.createProfileScreen() #log into program
+            self.createProgramScreen() #log into program
         else:
             messagebox.showerror("Login Error", "Invalid username or password")
+
+    def registerUser(self):
+        if (self.registerUsernameStr.get() in self.jsonUserlogin or self.registerUsernameStr.get() == "default"):
+            messagebox.showerror("Invalid username", "Username already exists")
+        elif (len(self.registerUsernameStr.get()) < 3 or 16 < len(self.registerUsernameStr.get())):
+            messagebox.showwarning("Invalid username", "Username must be 3 to 16 characters long")
+        elif (len(self.registerPasswordStr.get()) < 3 or 32 < len(self.registerPasswordStr.get())):
+            messagebox.showwarning("Invalid password", "Password must be 3 to 32 characters long")
+        elif (self.registerPasswordStr.get() == self.registerUsernameStr.get()):
+            messagebox.showwarning("Invalid password", "Password cannot be the same as username")
+        elif not (self.registerPasswordStr.get() == self.registerPasswordReStr.get()):
+            messagebox.showerror("Invalid password", "Retype Password does not match")
+        else:
+            self.setUserlogin(self.registerUsernameStr.get(), self.passwordHiding(self.registerPasswordStr.get()))
+            self.registerUsernameStr.set("")
+            self.registerPasswordStr.set("")
+            self.registerPasswordReStr.set("")
+            messagebox.showinfo("Account created", "You can now login using that account")
     
-    def getUserData(self, username):
+    def getUserlogin(self, username):
         with open(self.userDirectory+self.userloginFile, "r") as fileIn:
             self.jsonUserlogin = json.load(fileIn)
         return self.jsonUserlogin[username]
 
-    def setUserData(self, username, password):
+    def setUserlogin(self, username, password):
         self.jsonUserlogin[username] = password
         with open(self.userDirectory+self.userloginFile, "w") as fileOut:
             json.dump(self.jsonUserlogin, fileOut) #write to .json file
@@ -223,8 +273,9 @@ class appDCM:
             button.state(['!alternate'])
         button.state([state])
 
+    # register screen =========================================================================================================================
     def createRegisterScreen(self):
-        if "registerScreen" in self.screenDictionary:
+        if self.checkScreenExist("registerScreen"):
             print("register screen already exist")
             self.displayScreen("registerScreen")
             return False
@@ -232,20 +283,16 @@ class appDCM:
             self.registerFrame = Frame(self.root, padx=20, pady=10)
             self.registerFrame.columnconfigure((1, 2), weight=1)
             self.registerFrame.rowconfigure((0, 1, 4), weight=1)
-            self.screenDictionary["registerScreen"] = self.registerFrame
+            self.addScreen("registerScreen", self.registerFrame)
 
             #styling tk and ttk
             self.createFont("loginFont", "TkDefaultFont", 12)
-            self.ttkStyle = ttk.Style()
-            self.ttkStyle.configure("loginButton.TButton", font=("TkDefaultFont", 20, "bold"))
-
-            #title widget
+            self.ttkCreateFont("loginButton.TButton", "TkDefaultFont", 20, "bold")
             self.createFont("loginTitleFont", "TkDefaultFont", 30, "bold")
-            self.registerTitle = Label(self.registerFrame, text="Register", font=self.fontDictionary["loginTitleFont"], height=2)
-            self.registerTitle.grid(row=0, columnspan=3, sticky=N)
-            
+
             #create widget
-            self.createFont("loginFont", "TkDefaultFont", 12)
+            self.registerTitle = Label(self.registerFrame, text="Register", font=self.fontDictionary["loginTitleFont"], height=2)
+            
             self.registerUsernameLabel = Label(self.registerFrame, text="New Username", font=self.fontDictionary["loginFont"])
             self.registerPasswordLabel = Label(self.registerFrame, text="New Password", font=self.fontDictionary["loginFont"])
             self.registerPasswordReLabel = Label(self.registerFrame, text="Retype Password", font=self.fontDictionary["loginFont"])
@@ -259,6 +306,8 @@ class appDCM:
             self.smallLoginButton = ttk.Button(self.registerFrame, text="Login", command=lambda:self.createLoginScreen())
             
             #display widget
+            self.registerTitle.grid(row=0, columnspan=3, sticky=N)
+            
             self.registerUsernameLabel.grid(row=1, padx=5, sticky=E+S)
             self.registerPasswordLabel.grid(row=2, padx=5, sticky=E)
             self.registerPasswordReLabel.grid(row=3, padx=5, sticky=E+N)
@@ -279,58 +328,168 @@ class appDCM:
             self.registerUsernameEntry.configure(textvariable=self.registerUsernameStr)
             self.registerPasswordEntry.configure(textvariable=self.registerPasswordStr)
             self.registerPasswordReEntry.configure(textvariable=self.registerPasswordReStr)
-            
+
+            #display screen
             self.displayScreen("registerScreen")
             print("register screen created successfully")
             return True
 
-    def registerUser(self):
-        if (self.registerUsernameStr.get() in self.jsonUserlogin or self.registerUsernameStr.get() == "default"):
-            messagebox.showerror("Invalid username", "Username already exists")
-        elif (len(self.registerUsernameStr.get()) < 3 or 16 < len(self.registerUsernameStr.get())):
-            messagebox.showwarning("Invalid username", "Username must be 3 to 16 characters long")
-        elif (len(self.registerPasswordStr.get()) < 3 or 32 < len(self.registerPasswordStr.get())):
-            messagebox.showwarning("Invalid password", "Password must be 3 to 32 characters long")
-        elif (self.registerPasswordStr.get() == self.registerUsernameStr.get()):
-            messagebox.showwarning("Invalid password", "Password cannot be the same as username")
-        elif not (self.registerPasswordStr.get() == self.registerPasswordReStr.get()):
-            messagebox.showerror("Invalid password", "Retype Password does not match")
-        else:
-            self.setUserData(self.registerUsernameStr.get(), self.passwordHiding(self.registerPasswordStr.get()))
-            self.registerUsernameStr.set("")
-            self.registerPasswordStr.set("")
-            self.registerPasswordReStr.set("")
-            messagebox.showinfo("Account created", "You can now login using that account")
-
+    #program screen ============================================================================================================================
     def createProgramScreen(self):
-        if "programScreen" in self.screenDictionary:
+        if self.checkScreenExist("programScreen"):
             print("program screen already exist")
             self.displayScreen("programScreen")
             return False
         else:
             self.programFrame = Frame(self.root, padx=20, pady=10)
             self.programFrame.columnconfigure(0, weight=1)
-            self.screenDictionary["programScreen"] = self.programFrame
+            self.addScreen("programScreen", self.programFrame)
 
             #styling tk and ttk
             self.createFont("programFont", "TkDefaultFont", 30, "bold")
-
-            self.programTitle = Label(self.programFrame, text="Program Goes Here", font=self.fontDictionary["programFont"])
+            self.programTitle = Label(self.programFrame, text="Program Name Filler", font=self.fontDictionary["programFont"])
             self.programTitle.grid(row=0)
 
+            #create notebook widget
+            self.notebook = ttk.Notebook(self.programFrame)
+            self.notebook.grid(row=1, column=0, padx=0, pady=0, sticky=W+E+N+S)
+
+            #create notebook pages
+            self.paceSettingFrame = Frame(self.notebook)#, bg="#fff")
+            self.paceSettingFrame.columnconfigure((1, 3, 5), weight=1)
+            self.notebook.add(self.paceSettingFrame, text="Pace Setting", padding=(10, 10))
+            self.aboutAppFrame = Frame(self.notebook)
+            self.notebook.add(self.aboutAppFrame, text="Board Details", padding=(10, 10))
+
+            #create combobox widget
+            self.programModeLabel = Label(self.paceSettingFrame, text="Select Pacing Mode:", pady=10)#, bg="#fff")
+            self.programModeLabel.grid(row=0, column=0, padx=5)
+            self.programModeCombobox = ttk.Combobox(self.paceSettingFrame, width=6)
+            self.programModeCombobox.grid(row=0, column=1, sticky=W)
+            self.programModeCombobox['values'] = ('AAT', 'VVT', 'AOO', 'AAI', 'VOO', 'VVI', 'VDD', 'DOO', 'DDI', 'DDD',
+                                                  'AOOR', 'AAIR', 'VOOR', 'VVIR', 'VDDR', 'DOOR', 'DDIR', 'DDDR')
+
+            #create parameter widget
+            self.label01 = Label(self.paceSettingFrame, text="Lower Rate Limit")
+            self.label02 = Label(self.paceSettingFrame, text="Upper Rate Limit")
+            self.label03 = Label(self.paceSettingFrame, text="Maximum Sensor Rate")
+            self.label04 = Label(self.paceSettingFrame, text="Fixed AV Delay")
+            self.label05 = Label(self.paceSettingFrame, text="Dynamic AV Delay")
+            self.label06 = Label(self.paceSettingFrame, text="Sensed AV Delay Offset")
+            self.label07 = Label(self.paceSettingFrame, text="Atrial Amplitude")
+            self.label08 = Label(self.paceSettingFrame, text="Ventricular Amplitude")
+            self.label09 = Label(self.paceSettingFrame, text="Atrial Pulse Width")
+            self.label10 = Label(self.paceSettingFrame, text="Ventricular Pulse Width")
+            self.label11 = Label(self.paceSettingFrame, text="Atrial Sensitivity")
+            self.label12 = Label(self.paceSettingFrame, text="Ventricular Sensitivity")
+            self.label13 = Label(self.paceSettingFrame, text="VRP")
+            self.label14 = Label(self.paceSettingFrame, text="ARP")
+            self.label15 = Label(self.paceSettingFrame, text="PVARP")
+            self.label16 = Label(self.paceSettingFrame, text="PVARP Extension")
+            self.label17 = Label(self.paceSettingFrame, text="Hysteresis")
+            self.label18 = Label(self.paceSettingFrame, text="Rate Smoothing")
+            self.label19 = Label(self.paceSettingFrame, text="ATR Duration")
+            self.label20 = Label(self.paceSettingFrame, text="ATR Fallback Mode")
+            self.label21 = Label(self.paceSettingFrame, text="ATR Fallback Time")
+            self.label22 = Label(self.paceSettingFrame, text="Activity Threshold")
+            self.label23 = Label(self.paceSettingFrame, text="Reaction Time")
+            self.label24 = Label(self.paceSettingFrame, text="Response Factor")
+            self.label25 = Label(self.paceSettingFrame, text="Recovery Time")
+
+            self.entry01 = ttk.Entry(self.paceSettingFrame)
+            self.entry02 = ttk.Entry(self.paceSettingFrame)
+            self.entry03 = ttk.Entry(self.paceSettingFrame)
+            self.entry04 = ttk.Entry(self.paceSettingFrame)
+            self.entry05 = ttk.Entry(self.paceSettingFrame)
+            self.entry06 = ttk.Entry(self.paceSettingFrame)
+            self.entry07 = ttk.Entry(self.paceSettingFrame)
+            self.entry08 = ttk.Entry(self.paceSettingFrame)
+            self.entry09 = ttk.Entry(self.paceSettingFrame)
+            self.entry10 = ttk.Entry(self.paceSettingFrame)
+            self.entry11 = ttk.Entry(self.paceSettingFrame)
+            self.entry12 = ttk.Entry(self.paceSettingFrame)
+            self.entry13 = ttk.Entry(self.paceSettingFrame)
+            self.entry14 = ttk.Entry(self.paceSettingFrame)
+            self.entry15 = ttk.Entry(self.paceSettingFrame)
+            self.entry16 = ttk.Entry(self.paceSettingFrame)
+            self.entry17 = ttk.Entry(self.paceSettingFrame)
+            self.entry18 = ttk.Entry(self.paceSettingFrame)
+            self.entry19 = ttk.Entry(self.paceSettingFrame)
+            self.entry20 = ttk.Entry(self.paceSettingFrame)
+            self.entry21 = ttk.Entry(self.paceSettingFrame)
+            self.entry22 = ttk.Entry(self.paceSettingFrame)
+            self.entry23 = ttk.Entry(self.paceSettingFrame)
+            self.entry24 = ttk.Entry(self.paceSettingFrame)
+            self.entry25 = ttk.Entry(self.paceSettingFrame)
+            
+            #display parameter widget
+            self.label01.grid(row=1, column=0, padx=5, pady=5)
+            self.label02.grid(row=2, column=0, padx=5, pady=5)
+            self.label03.grid(row=3, column=0, padx=5, pady=5)
+            self.label04.grid(row=4, column=0, padx=5, pady=5)
+            self.label05.grid(row=5, column=0, padx=5, pady=5)
+            self.label06.grid(row=6, column=0, padx=5, pady=5)
+            self.label07.grid(row=7, column=0, padx=5, pady=5)
+            self.label08.grid(row=8, column=0, padx=5, pady=5)
+            self.label09.grid(row=9, column=0, padx=5, pady=5)
+            self.label10.grid(row=10, column=0, padx=5, pady=5)
+            self.label11.grid(row=1, column=2, padx=5, pady=5)
+            self.label12.grid(row=2, column=2, padx=5, pady=5)
+            self.label13.grid(row=3, column=2, padx=5, pady=5)
+            self.label14.grid(row=4, column=2, padx=5, pady=5)
+            self.label15.grid(row=5, column=2, padx=5, pady=5)
+            self.label16.grid(row=6, column=2, padx=5, pady=5)
+            self.label17.grid(row=7, column=2, padx=5, pady=5)
+            self.label18.grid(row=8, column=2, padx=5, pady=5)
+            self.label19.grid(row=9, column=2, padx=5, pady=5)
+            self.label20.grid(row=10, column=2, padx=5, pady=5)
+            self.label21.grid(row=1, column=4, padx=5, pady=5)
+            self.label22.grid(row=2, column=4, padx=5, pady=5)
+            self.label23.grid(row=3, column=4, padx=5, pady=5)
+            self.label24.grid(row=4, column=4, padx=5, pady=5)
+            self.label25.grid(row=5, column=4, padx=5, pady=5)
+            
+            self.entry01.grid(row=1, column=1, sticky=W)
+            self.entry02.grid(row=2, column=1, sticky=W)
+            self.entry03.grid(row=3, column=1, sticky=W)
+            self.entry04.grid(row=4, column=1, sticky=W)
+            self.entry05.grid(row=5, column=1, sticky=W)
+            self.entry06.grid(row=6, column=1, sticky=W)
+            self.entry07.grid(row=7, column=1, sticky=W)
+            self.entry08.grid(row=8, column=1, sticky=W)
+            self.entry09.grid(row=9, column=1, sticky=W)
+            self.entry10.grid(row=10, column=1, sticky=W)
+            self.entry11.grid(row=1, column=3, sticky=W)
+            self.entry12.grid(row=2, column=3, sticky=W)
+            self.entry13.grid(row=3, column=3, sticky=W)
+            self.entry14.grid(row=4, column=3, sticky=W)
+            self.entry15.grid(row=5, column=3, sticky=W)
+            self.entry16.grid(row=6, column=3, sticky=W)
+            self.entry17.grid(row=7, column=3, sticky=W)
+            self.entry18.grid(row=8, column=3, sticky=W)
+            self.entry19.grid(row=9, column=3, sticky=W)
+            self.entry20.grid(row=10, column=3, sticky=W)
+            self.entry21.grid(row=1, column=5, sticky=W)
+            self.entry22.grid(row=2, column=5, sticky=W)
+            self.entry23.grid(row=3, column=5, sticky=W)
+            self.entry24.grid(row=4, column=5, sticky=W)
+            self.entry25.grid(row=5, column=5, sticky=W)
+            
+            #display screen
             self.displayScreen("programScreen")
             print("program screen created successfully")
-            return True
+            return True        
 
+    #profile screen ===============================================================================================================================
     def createProfileScreen(self):
-        if "profileScreen" in self.screenDictionary:
+        if self.checkScreenExist("profileScreen"):
             print("profile screen already exist")
             self.displayScreen("profileScreen", "top")
             return False
         else:
             self.profileFrame = Frame(self.root, padx=20, pady=10)
             self.profileFrame.columnconfigure(0, weight=1)
-            self.screenDictionary["profileScreen"] = self.profileFrame
+            self.addScreen("profileScreen", self.profileFrame)
 
             self.profileSoftwareName = Label(self.profileFrame, text="Pacemaker Controller-Monitor")
             self.profileSoftwareName.grid(row=0, sticky=W)
@@ -338,11 +497,13 @@ class appDCM:
             self.profileButton = ttk.Button(self.profileFrame, text="Logout", command=lambda:self.logoutUser())
             self.profileButton.grid(row=0, sticky=E)
 
+            #display screen
             self.displayScreen("profileScreen", "top")
             print("profile screen created successfully")
             return True
 
     def logoutUser(self):
+        self.root.config(menu="")
         self.createLoginScreen()
         self.createHeaderScreen()
 
