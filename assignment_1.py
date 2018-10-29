@@ -13,7 +13,6 @@ class appDCM:
     #userdata file and directory =================
     userDirectory = "./user"
     userloginFile = "/userlogin.json"
-    jsonUserlogin = {}
     
     def __init__(self):
         #pre-program check for necessary files and variables ==================
@@ -229,19 +228,23 @@ class appDCM:
         self.passwordStr.set("") #clear password entry for login safety
 
         if (self.usernameStr.get() in self.jsonUserlogin and tempPassword == self.jsonUserlogin[self.usernameStr.get()]):
+            self.currentUsername = self.usernameStr.get()#store current user
+            
             if not (self.rememberMeButton.state() == ()): #if button is checked
                 self.setUserlogin("default", self.usernameStr.get()) #remember username
             else:
                 self.setUserlogin("default", "")
                 self.usernameStr.set("") #clear username entry
-                
+
             self.createProfileScreen() #log into program
             self.createProgramScreen() #log into program
         else:
             messagebox.showerror("Login Error", "Invalid username or password")
 
     def registerUser(self):
-        if (self.registerUsernameStr.get() in self.jsonUserlogin or self.registerUsernameStr.get() == "default"):
+        if 11 <= len(self.jsonUserlogin):
+            messagebox.showerror("Max users reached", "Can only register a maximum of 10 users")
+        elif (self.registerUsernameStr.get() in self.jsonUserlogin or self.registerUsernameStr.get() == "default"):
             messagebox.showerror("Invalid username", "Username already exists")
         elif (len(self.registerUsernameStr.get()) < 3 or 16 < len(self.registerUsernameStr.get())):
             messagebox.showwarning("Invalid username", "Username must be 3 to 16 characters long")
@@ -339,6 +342,9 @@ class appDCM:
         if self.checkScreenExist("programScreen"):
             print("program screen already exist")
             self.displayScreen("programScreen")
+
+            #display stored user data
+            self.readUserData(self.currentUsername)
             return False
         else:
             self.programFrame = Frame(self.root, padx=20, pady=10)
@@ -369,7 +375,7 @@ class appDCM:
             self.programModeCombobox['values'] = ('AAT', 'VVT', 'AOO', 'AAI', 'VOO', 'VVI', 'VDD', 'DOO', 'DDI', 'DDD',
                                                   'AOOR', 'AAIR', 'VOOR', 'VVIR', 'VDDR', 'DOOR', 'DDIR', 'DDDR')
 
-            #create parameter widget
+            #create label widget
             self.label01 = Label(self.paceSettingFrame, text="Lower Rate Limit")
             self.label02 = Label(self.paceSettingFrame, text="Upper Rate Limit")
             self.label03 = Label(self.paceSettingFrame, text="Maximum Sensor Rate")
@@ -396,31 +402,59 @@ class appDCM:
             self.label24 = Label(self.paceSettingFrame, text="Response Factor")
             self.label25 = Label(self.paceSettingFrame, text="Recovery Time")
 
-            self.entry01 = ttk.Entry(self.paceSettingFrame)
-            self.entry02 = ttk.Entry(self.paceSettingFrame)
-            self.entry03 = ttk.Entry(self.paceSettingFrame)
-            self.entry04 = ttk.Entry(self.paceSettingFrame)
-            self.entry05 = ttk.Entry(self.paceSettingFrame)
-            self.entry06 = ttk.Entry(self.paceSettingFrame)
-            self.entry07 = ttk.Entry(self.paceSettingFrame)
-            self.entry08 = ttk.Entry(self.paceSettingFrame)
-            self.entry09 = ttk.Entry(self.paceSettingFrame)
-            self.entry10 = ttk.Entry(self.paceSettingFrame)
-            self.entry11 = ttk.Entry(self.paceSettingFrame)
-            self.entry12 = ttk.Entry(self.paceSettingFrame)
-            self.entry13 = ttk.Entry(self.paceSettingFrame)
-            self.entry14 = ttk.Entry(self.paceSettingFrame)
-            self.entry15 = ttk.Entry(self.paceSettingFrame)
-            self.entry16 = ttk.Entry(self.paceSettingFrame)
-            self.entry17 = ttk.Entry(self.paceSettingFrame)
-            self.entry18 = ttk.Entry(self.paceSettingFrame)
-            self.entry19 = ttk.Entry(self.paceSettingFrame)
-            self.entry20 = ttk.Entry(self.paceSettingFrame)
-            self.entry21 = ttk.Entry(self.paceSettingFrame)
-            self.entry22 = ttk.Entry(self.paceSettingFrame)
-            self.entry23 = ttk.Entry(self.paceSettingFrame)
-            self.entry24 = ttk.Entry(self.paceSettingFrame)
-            self.entry25 = ttk.Entry(self.paceSettingFrame)
+            #create entry variable
+            self.entry01Str = StringVar()
+            self.entry02Str = StringVar()
+            self.entry03Str = StringVar()
+            self.entry04Str = StringVar()
+            self.entry05Str = StringVar()
+            self.entry06Str = StringVar()
+            self.entry07Str = StringVar()
+            self.entry08Str = StringVar()
+            self.entry09Str = StringVar()
+            self.entry10Str = StringVar()
+            self.entry11Str = StringVar()
+            self.entry12Str = StringVar()
+            self.entry13Str = StringVar()
+            self.entry14Str = StringVar()
+            self.entry15Str = StringVar()
+            self.entry16Str = StringVar()
+            self.entry17Str = StringVar()
+            self.entry18Str = StringVar()
+            self.entry19Str = StringVar()
+            self.entry20Str = StringVar()
+            self.entry21Str = StringVar()
+            self.entry22Str = StringVar()
+            self.entry23Str = StringVar()
+            self.entry24Str = StringVar()
+            self.entry25Str = StringVar()
+
+            #create entry widget
+            self.entry01 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry01Str)
+            self.entry02 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry02Str)
+            self.entry03 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry03Str)
+            self.entry04 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry04Str)
+            self.entry05 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry05Str)
+            self.entry06 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry06Str)
+            self.entry07 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry07Str)
+            self.entry08 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry08Str)
+            self.entry09 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry09Str)
+            self.entry10 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry10Str)
+            self.entry11 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry11Str)
+            self.entry12 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry12Str)
+            self.entry13 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry13Str)
+            self.entry14 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry14Str)
+            self.entry15 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry15Str)
+            self.entry16 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry16Str)
+            self.entry17 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry17Str)
+            self.entry18 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry18Str)
+            self.entry19 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry19Str)
+            self.entry20 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry20Str)
+            self.entry21 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry21Str)
+            self.entry22 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry22Str)
+            self.entry23 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry23Str)
+            self.entry24 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry24Str)
+            self.entry25 = ttk.Entry(self.paceSettingFrame, textvariable=self.entry25Str)
             
             #display parameter widget
             self.label01.grid(row=1, column=0, padx=5, pady=5)
@@ -476,17 +510,149 @@ class appDCM:
             self.entry25.grid(row=5, column=5, sticky=W)
 
             #confirm button
-            self.confirmButton = ttk.Button(self.paceSettingFrame, text="Confirm")
+            self.confirmButton = ttk.Button(self.paceSettingFrame, text="Confirm", command=lambda:self.writeUserData(self.currentUsername))
             self.confirmButton.grid(row=11, column=4, padx=5, sticky=E)
             self.resetButton = ttk.Button(self.paceSettingFrame, text="Reset Settings")
             self.resetButton.grid(row=11, column=5, padx=5, sticky=W)
 
+            #display stored user data
+            self.readUserData(self.currentUsername)
             
             #display screen
             self.displayScreen("programScreen")
             print("program screen created successfully")
             return True        
 
+    #display setting
+    def displaySetting(self):
+        print("\ndisplay value ==============================")
+        print(self.label01.cget("text"), self.entry01Str.get())
+        print(self.label02.cget("text"), self.entry02Str.get())
+        print(self.label03.cget("text"), self.entry03Str.get())
+        print(self.label04.cget("text"), self.entry04Str.get())
+        print(self.label05.cget("text"), self.entry05Str.get())
+        print(self.label06.cget("text"), self.entry06Str.get())
+        print(self.label07.cget("text"), self.entry07Str.get())
+        print(self.label08.cget("text"), self.entry08Str.get())
+        print(self.label09.cget("text"), self.entry09Str.get())
+        print(self.label10.cget("text"), self.entry10Str.get())
+        print(self.label11.cget("text"), self.entry11Str.get())
+        print(self.label12.cget("text"), self.entry12Str.get())
+        print(self.label13.cget("text"), self.entry13Str.get())
+        print(self.label14.cget("text"), self.entry14Str.get())
+        print(self.label15.cget("text"), self.entry15Str.get())
+        print(self.label16.cget("text"), self.entry16Str.get())
+        print(self.label17.cget("text"), self.entry17Str.get())
+        print(self.label18.cget("text"), self.entry18Str.get())
+        print(self.label19.cget("text"), self.entry19Str.get())
+        print(self.label20.cget("text"), self.entry20Str.get())
+        print(self.label21.cget("text"), self.entry21Str.get())
+        print(self.label22.cget("text"), self.entry22Str.get())
+        print(self.label23.cget("text"), self.entry23Str.get())
+        print(self.label24.cget("text"), self.entry24Str.get())
+        print(self.label25.cget("text"), self.entry25Str.get())
+        print("============================================\n")
+
+    def readUserData(self, username):
+        self.userDataFile = "/"+username+".json"
+        self.jsonUserData = {}
+        try:
+            with open(self.userDirectory+self.userDataFile, "r") as fileIn:
+                self.jsonUserData = json.load(fileIn) #read user data
+
+                self.programModeCombobox.set(self.jsonUserData["paceMode"])
+                self.entry01Str.set(self.jsonUserData["entry01"])
+                self.entry02Str.set(self.jsonUserData["entry02"])
+                self.entry03Str.set(self.jsonUserData["entry03"])
+                self.entry04Str.set(self.jsonUserData["entry04"])
+                self.entry05Str.set(self.jsonUserData["entry05"])
+                self.entry06Str.set(self.jsonUserData["entry06"])
+                self.entry07Str.set(self.jsonUserData["entry07"])
+                self.entry08Str.set(self.jsonUserData["entry08"])
+                self.entry09Str.set(self.jsonUserData["entry09"])
+                self.entry10Str.set(self.jsonUserData["entry10"])
+                self.entry11Str.set(self.jsonUserData["entry11"])
+                self.entry12Str.set(self.jsonUserData["entry12"])
+                self.entry13Str.set(self.jsonUserData["entry13"])
+                self.entry14Str.set(self.jsonUserData["entry14"])
+                self.entry15Str.set(self.jsonUserData["entry15"])
+                self.entry16Str.set(self.jsonUserData["entry16"])
+                self.entry17Str.set(self.jsonUserData["entry17"])
+                self.entry18Str.set(self.jsonUserData["entry18"])
+                self.entry19Str.set(self.jsonUserData["entry19"])
+                self.entry20Str.set(self.jsonUserData["entry20"])
+                self.entry21Str.set(self.jsonUserData["entry21"])
+                self.entry22Str.set(self.jsonUserData["entry22"])
+                self.entry23Str.set(self.jsonUserData["entry23"])
+                self.entry24Str.set(self.jsonUserData["entry24"])
+                self.entry25Str.set(self.jsonUserData["entry25"])
+
+                print("read user data successfully")
+        except:
+            self.programModeCombobox.set("")
+            self.entry01Str.set("")
+            self.entry02Str.set("")
+            self.entry03Str.set("")
+            self.entry04Str.set("")
+            self.entry05Str.set("")
+            self.entry06Str.set("")
+            self.entry07Str.set("")
+            self.entry08Str.set("")
+            self.entry09Str.set("")
+            self.entry10Str.set("")
+            self.entry11Str.set("")
+            self.entry12Str.set("")
+            self.entry13Str.set("")
+            self.entry14Str.set("")
+            self.entry15Str.set("")
+            self.entry16Str.set("")
+            self.entry17Str.set("")
+            self.entry18Str.set("")
+            self.entry19Str.set("")
+            self.entry20Str.set("")
+            self.entry21Str.set("")
+            self.entry22Str.set("")
+            self.entry23Str.set("")
+            self.entry24Str.set("")
+            self.entry25Str.set("")
+            print("user data is corrupted or does not yet exist")
+
+    def writeUserData(self, username):
+        self.displaySetting()
+        self.jsonUserData = {} #reset json variable
+
+        self.userDataFile = "/"+username+".json"
+        with open(self.userDirectory+self.userDataFile, "w") as fileOut:
+            self.jsonUserData["paceMode"] = self.programModeCombobox.get()
+            self.jsonUserData["entry01"] = self.entry01Str.get()
+            self.jsonUserData["entry02"] = self.entry02Str.get()
+            self.jsonUserData["entry03"] = self.entry03Str.get()
+            self.jsonUserData["entry04"] = self.entry04Str.get()
+            self.jsonUserData["entry05"] = self.entry05Str.get()
+            self.jsonUserData["entry06"] = self.entry06Str.get()
+            self.jsonUserData["entry07"] = self.entry07Str.get()
+            self.jsonUserData["entry08"] = self.entry08Str.get()
+            self.jsonUserData["entry09"] = self.entry09Str.get()
+            self.jsonUserData["entry10"] = self.entry10Str.get()
+            self.jsonUserData["entry11"] = self.entry11Str.get()
+            self.jsonUserData["entry12"] = self.entry12Str.get()
+            self.jsonUserData["entry13"] = self.entry13Str.get()
+            self.jsonUserData["entry14"] = self.entry14Str.get()
+            self.jsonUserData["entry15"] = self.entry15Str.get()
+            self.jsonUserData["entry16"] = self.entry16Str.get()
+            self.jsonUserData["entry17"] = self.entry17Str.get()
+            self.jsonUserData["entry18"] = self.entry18Str.get()
+            self.jsonUserData["entry19"] = self.entry19Str.get()
+            self.jsonUserData["entry20"] = self.entry20Str.get()
+            self.jsonUserData["entry21"] = self.entry21Str.get()
+            self.jsonUserData["entry22"] = self.entry22Str.get()
+            self.jsonUserData["entry23"] = self.entry23Str.get()
+            self.jsonUserData["entry24"] = self.entry24Str.get()
+            self.jsonUserData["entry25"] = self.entry25Str.get()
+            json.dump(self.jsonUserData, fileOut) #write to .json file
+            print("write user data successfully")
+            
+        
     #profile screen ===============================================================================================================================
     def createProfileScreen(self):
         if self.checkScreenExist("profileScreen"):
