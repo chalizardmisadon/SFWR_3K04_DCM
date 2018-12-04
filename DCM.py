@@ -7,22 +7,26 @@ from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import time
-import json
-import os
-import base64
+import serial   #for serial communication
+import json     #for user data storage
+import os       #for directory pathing
+import base64   #for password hiding
 
 class appDCM:
-    #DCM version number ==========================
-    versionNumber = "2.0"
     #image file and directory ====================
     imageDirectory = "./images"
     logoFile = "/MacFireball.png"
-    connected = "/connected.png"
-    disconnected = "/disconnected.png"
 
     #userdata file and directory =================
     userDirectory = "./user"
     userloginFile = "/userlogin.json"
+
+    #serial communication ========================
+    self.uartPort = {}
+    self.port = False
+    
+    echoIDStr = "\x16\x33" + "\x00"*38
+    resetIDStr = "\x16\x35" + "\x00"*38
     
     def __init__(self):
         #pre-program check for necessary files and variables ==================
@@ -249,8 +253,6 @@ class appDCM:
             self.createProfileScreen() #log into program
             self.createProgramScreen() #log into program
             self.createEgram()  #display electrogram
-            self.boardDetails() #display board details
-            self.rootWindowResize()
         else:
             messagebox.showerror("Login Error", "Invalid username or password")
 
@@ -290,7 +292,7 @@ class appDCM:
             button.state(['!alternate'])
         button.state([state])
 
-    # register screen =========================================================================================================================
+    #register screen =========================================================================================================================
     def createRegisterScreen(self):
         if self.checkScreenExist("registerScreen"):
             print("register screen already exist")
@@ -361,13 +363,13 @@ class appDCM:
             self.readUserData(self.currentUsername)
             return False
         else:
-            self.programFrame = Frame(self.root, padx=20, pady=10, relief=RIDGE)
+            self.programFrame = Frame(self.root, padx=20, pady=10)
             self.programFrame.columnconfigure(0, weight=1)
             self.addScreen("programScreen", self.programFrame)
 
             #styling tk and ttk
-            self.createFont("programFont", "TkDefaultFont", 24, "bold")
-            self.programTitle = Label(self.programFrame, text="Pacemaker Controller", font=self.fontDictionary["programFont"])
+            self.createFont("programFont", "TkDefaultFont", 30, "bold")
+            self.programTitle = Label(self.programFrame, text="Program Name Filler", font=self.fontDictionary["programFont"])
             self.programTitle.grid(row=0)
 
             #create notebook widget
@@ -624,23 +626,56 @@ class appDCM:
             self.displayScreen("programScreen")
             print("program screen created successfully")
             return True
-        
 
-    #electrogram tab
+    #serial communication ===============================================================================================================================
+    def listValidComPort(self):
+        portDescription = "UART"
+        comPort = serial.tools.list_ports.grep(portDescription)
+        self.uartPort = {}
+        for p in comPort:
+            self.uartPort[p.device] = p.description
+        return bool(self.uartPort)
+    
+    def getValidPacemaker(self):
+        for p in self.uartPort:
+            self.port = serial.Serial(port=p, baudrate=115200)
+            self.port.timeout = 1
+            self.serialEchoID(self.port)
+            self.pacemakerID = str(self.serialReadData(self.port))
+            print(self.pacemakerID, type(self.pacemakerID))
+            if "42069" in self.pacemakerID:
+                print(p, "is a valid pacemaker")
+                return True
+            else:
+                print(p, "is not valid pacemaker")
+        return False
+
+    def serialEchoID(self, port):
+        try:
+            echoIDByte = str.encode(echoIDStr)
+            port.write(echoIDByte)
+        except:
+            echoIDStr = "\x16\x33" + "\x00"*38
+            echoIDByte = str.encode(echoIDStr)
+            port.write(echoIDByte)
+
+    def serialReadData(self, port):
+        return port.read(40)
+
+    #egram ==============================================================================================================================================
     pulseplot = False
-
     def change_state(self):
         if appDCM.pulseplot == True:
             appDCM.pulseplot = False
         else:
             appDCM.pulseplot = True
 
-    style.use("ggplot")
+    #style.use("ggplot")
     xar = [0, 0.1]
     yar = [0, 0]
     def createEgram(self):
         self.fig = plt.Figure()
-        self.ax = self.fig.add_subplot(111)
+        self.ax = self.fig.add_subplot(211)
         self.ax.grid()
         self.line, = self.ax.plot(appDCM.xar, appDCM.yar)
         self.ax.set_ylim(-1, 1) 
@@ -663,60 +698,6 @@ class appDCM:
     def gui_handler(self):
         self.change_state()
         self.refresh()
-
-    #board details tab
-    def boardDetails(self):
-        self.DCM_version_label = Label(self.aboutAppFrame, width=20, text="DCM version: "+appDCM.versionNumber, font=self.fontDictionary["loginFont"], relief=RIDGE)
-        self.TelemetryStatusFrame = Frame(self.aboutAppFrame, relief=GROOVE)
-        self.TelemetryStatusFrame.pack(padx=30, pady=30, side=TOP)
-        self.TelemetryStatusFrame.columnconfigure(0, weight=2)
-        self.TelemetryStatusFrame.columnconfigure(1, weight=3)
-        self.TelemetryStatusFrame.columnconfigure(2, weight=1)
-
-        self.TelemetryStatusTitle = Label(self.TelemetryStatusFrame, text="Telemetry Status", font='Arial 18 bold')
-        self.COM_Port_label = Label(self.TelemetryStatusFrame, text="COM Port:")
-        self.Pacemaker_Connection_label = Label(self.TelemetryStatusFrame, text="Pacemaker:")
-        self.Last_Program_Time_label = Label(self.TelemetryStatusFrame, text="Last Program Time:")
-        self.Current_Pacing_Mode_label = Label(self.TelemetryStatusFrame, text="Current Pacing Mode:")
-
-        self.comport_description = Label(self.TelemetryStatusFrame, text="No device was found.", fg='#f44336', justify=LEFT)
-        self.pacemaker_description = Label(self.TelemetryStatusFrame, text="No pacemaker was detected.", fg='#f44336', justify=LEFT)
-        self.lastProgramTime_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0', justify=LEFT)
-        self.currentPacingMode_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0', justify=LEFT)
-
-        if os.path.exists(self.imageDirectory): #if img directory exist
-            self.connectedImg = PhotoImage(file=self.imageDirectory+self.connected)
-            self.disconnectedImg = PhotoImage(file=self.imageDirectory+self.disconnected)
-            self.comport_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
-            self.pacemaker_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
-
-##        if something:
-##            self.comport_description.config(text="Connected: (Name of UART device here)", fg='#4caf50')
-##            self.comport_connectionImgLabel.config(image=self.connectedImg)
-##        if something:
-##            self.pacemaker_description.config(text="Pacemaker Detected: (Pacmaker ID here)", fg='#4caf50')
-##            self.pacemaker_connectionImgLabel.config(image=self.connectedImg)
-##        if something:
-##            self.lastProgramTime_description.config(text="(This will say the last program time)", fg='#4caf50')
-##        if something:
-##            self.currentPacingMode_description.config(text="(This will state the current pacing mode)", fg='#4caf50')
-        
-        #display labels
-        self.DCM_version_label.pack(pady=20)
-        self.TelemetryStatusTitle.grid(row=0, columnspan=3, sticky=N)
-        self.COM_Port_label.grid(row=1, column=1, pady=5)
-        self.Pacemaker_Connection_label.grid(row=2, column=1, pady=5)
-        self.Last_Program_Time_label.grid(row=3, column=1, pady=5)
-        self.Current_Pacing_Mode_label.grid(row=4, column=1, pady=5)
-
-        self.comport_description.grid(row=1, column=2, pady=5)
-        self.pacemaker_description.grid(row=2, column=2, pady=5)
-        self.lastProgramTime_description.grid(row=3, column=2, pady=5)
-        self.currentPacingMode_description.grid(row=4, column=2, pady=5)
-
-        self.comport_connectionImgLabel.grid(row=1, column=0, pady=5)
-        self.pacemaker_connectionImgLabel.grid(row=2, column=0, pady=5)
-        
 
     #display setting
     def displaySetting(self):
