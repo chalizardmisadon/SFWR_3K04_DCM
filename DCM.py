@@ -31,9 +31,11 @@ class appDCM:
     uartPort = {}
     port = False
     pacemakerID = b''
+    pacemakerMode = b''
     
     echoIDStr = "\x16\x33" + "\x00"*38
     resetIDStr = "\x16\x35" + "\x00"*38
+    echoParameterStr = "\x16\x22" + "\x00"*38
     
     def __init__(self):
         #pre-program check for necessary files and variables ==================
@@ -647,29 +649,44 @@ class appDCM:
     
     def getValidPacemaker(self):
         for p in self.uartPort:
-            self.port = serial.Serial(port=p, baudrate=115200)
-            self.port.timeout = 1
-            self.serialEchoID(self.port)
-            self.pacemakerID = self.serialReadData(self.port)
-##            print(self.pacemakerID, type(self.pacemakerID))
-            if str.encode("42069") in self.pacemakerID:
-                print(p, "is a valid pacemaker")
-                return True
-            else:
-                print(p, "is not valid pacemaker")
+            try:
+                self.port = serial.Serial(port=p, baudrate=115200)
+                self.port.timeout = 1
+                self.serialEchoID()
+                self.pacemakerID = self.serialReadData()
+                print(self.pacemakerID, type(self.pacemakerID))
+                if str.encode("42069") in self.pacemakerID:
+                    print(p, "is a valid pacemaker")
+                    return True
+                else:
+                    print(p, "is not valid pacemaker")
+            except:
+                print(p, "is not a valid serial port")
+        self.port = False
         return False
+    
+    def serialReadData(self):
+        return self.port.read(40)
 
-    def serialEchoID(self, port):
+    def serialEchoID(self):
         try:
             echoIDByte = str.encode(echoIDStr)
-            port.write(echoIDByte)
+            self.port.write(echoIDByte)
         except:
             echoIDStr = "\x16\x33" + "\x00"*38
             echoIDByte = str.encode(echoIDStr)
             port.write(echoIDByte)
 
-    def serialReadData(self, port):
-        return port.read(40)
+    def serialEchoParameter(self):
+        try:    
+            echoParameterByte = str.encode(echoParameterStr)
+            self.port.write(echoParameterByte)
+        except:
+            echoParameterStr = "\x16\x22" + "\x00"*38
+            echoParameterByte = str.encode(echoParameterStr)
+            port.write(echoParameterByte)
+        
+        
 
     
     #egram ==============================================================================================================================================
@@ -768,6 +785,11 @@ class appDCM:
             displayTimeInt = int.from_bytes(self.pacemakerID[31:-2], 'little')
             displayTimeStr = datetime.fromtimestamp(displayTimeInt).strftime('%Y-%m-%d %H:%M:%S')
             self.lastProgramTime_description.config(text=displayTimeStr, fg='#4caf50')
+
+            #get pacemaker parameters
+            self.serialEchoParameter()
+            self.pacemakerMode = serialReadData()
+            
 ##        if something:
 ##            self.currentPacingMode_description.config(text="(This will state the current pacing mode)", fg='#4caf50')
 
