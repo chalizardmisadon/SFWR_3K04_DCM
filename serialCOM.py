@@ -1,6 +1,8 @@
 import serial
+import serial.tools.list_ports
 import time
 
+'''
 ser = serial.Serial(port="COM4", baudrate=115200)
 
 echoParameterStr = "\x16\x22" + "\x00"*38
@@ -65,7 +67,7 @@ print()
 
 testCmd = str.encode("\x16\x45\x55\x01" + "\x00"*54)
 
-print(ser.write(resetIDByte))
+##print(ser.write(resetIDByte))
 
 ##print(ser.write(cmdByte))
 ##inData = ser.read(40)
@@ -75,7 +77,7 @@ print(ser.write(resetIDByte))
 time.sleep(2)
 print(ser.write(echoIDByte))
 inData = ser.read(40)
-print(inData, len(inData))
+print(inData, len(inData), type(inData))
 
 
 def serialEchoID():
@@ -127,7 +129,65 @@ def serialWriteParameter():
     cmdByte = SYNC + WRITE + modeByte + intByte
     print(ser.write(cmdByte))
     time.sleep(1)
+'''
 
+'''
+comPort = serial.tools.list_ports.grep("UART")
+uartPort = {}
+for p in comPort:
+    uartPort[p.device] = p.description
+print(uartPort)
+print(bool(uartPort))
+for p in uartPort:
+    print(p)
 
-            
         
+##print([[p.description, p.device] for p in comPort])
+##print([p.device for p in comPort])
+
+
+##print([p.description for p in serial.tools.list_ports.grep("UART")])
+ser = serial.Serial(port="COM4", baudrate=115200)
+ser.timeout = 0.1
+inData = ser.read(40)
+print(inData, len(inData))
+'''
+
+class appDCM:
+
+    def listValidComPort(self):
+        portDescription = "UART"
+        comPort = serial.tools.list_ports.grep(portDescription)
+        self.uartPort = {}
+        for p in comPort:
+            self.uartPort[p.device] = p.description
+        return bool(self.uartPort)
+    
+    def getValidPacemaker(self):
+        for p in self.uartPort:
+            self.port = serial.Serial(port=p, baudrate=115200)
+            self.port.timeout = 1
+            self.serialEchoID(self.port)
+            self.pacemakerID = str(self.serialReadData(self.port))
+            print(self.pacemakerID, type(self.pacemakerID))
+            if "42069" in self.pacemakerID:
+                print(p, "is a valid pacemaker")
+                return True
+            else:
+                print(p, "is not valid pacemaker")
+        return False
+
+    def serialEchoID(self, port):
+        echoIDStr = "\x16\x33" + "\x00"*38
+        echoIDByte = str.encode(echoIDStr)
+        port.write(echoIDByte)
+
+
+    def serialReadData(self, port):
+        return port.read(40)
+
+login = appDCM()
+print(login.listValidComPort())
+login.getValidPacemaker()
+time.sleep(2)
+print(login.port)
