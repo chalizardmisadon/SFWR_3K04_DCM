@@ -7,6 +7,7 @@ from matplotlib import style
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import time
+from datetime import datetime
 import serial.tools.list_ports      #for serial communication
 import serial                       #for serial communication
 import json     #for user data storage
@@ -29,6 +30,7 @@ class appDCM:
     #serial communication ========================
     uartPort = {}
     port = False
+    pacemakerID = b''
     
     echoIDStr = "\x16\x33" + "\x00"*38
     resetIDStr = "\x16\x35" + "\x00"*38
@@ -648,9 +650,9 @@ class appDCM:
             self.port = serial.Serial(port=p, baudrate=115200)
             self.port.timeout = 1
             self.serialEchoID(self.port)
-            self.pacemakerID = str(self.serialReadData(self.port))
-            print(self.pacemakerID, type(self.pacemakerID))
-            if "42069" in self.pacemakerID:
+            self.pacemakerID = self.serialReadData(self.port)
+##            print(self.pacemakerID, type(self.pacemakerID))
+            if str.encode("42069") in self.pacemakerID:
                 print(p, "is a valid pacemaker")
                 return True
             else:
@@ -708,7 +710,7 @@ class appDCM:
         self.change_state()
         self.refresh()
 
-    #board details tab
+    #board details ======================================================================================================================================
     def boardDetails(self):
         self.DCM_version_label = Label(self.aboutAppFrame, width=20, text="DCM version: "+appDCM.versionNumber, font=self.fontDictionary["loginFont"], relief=RIDGE)
         self.TelemetryStatusFrame = Frame(self.aboutAppFrame, relief=GROOVE)
@@ -749,17 +751,23 @@ class appDCM:
 
         self.comport_connectionImgLabel.grid(row=1, column=0, pady=5)
         self.pacemaker_connectionImgLabel.grid(row=2, column=0, pady=5)
-        
+
+        self.refreshBoardInfo()
 
     def refreshBoardInfo(self):
         if self.listValidComPort():
             self.comport_description.config(text="UART device detected", fg='#4caf50')
             self.comport_connectionImgLabel.config(image=self.connectedImg)
-##        if getValidPacemaker(:
-##            self.pacemaker_description.config(text="Pacemaker Detected: (Pacmaker ID here)", fg='#4caf50')
-##            self.pacemaker_connectionImgLabel.config(image=self.connectedImg)
-##        if something:
-##            self.lastProgramTime_description.config(text="(This will say the last program time)", fg='#4caf50')
+
+        if self.getValidPacemaker():
+            displayID = self.pacemakerID[5:30].decode("utf-8").rstrip('\0')
+            print(displayID, type(displayID))
+            self.pacemaker_description.config(text="Detected: " + displayID, fg='#4caf50')
+            self.pacemaker_connectionImgLabel.config(image=self.connectedImg)
+
+            displayTimeInt = int.from_bytes(self.pacemakerID[31:-2], 'little')
+            displayTimeStr = datetime.fromtimestamp(displayTimeInt).strftime('%Y-%m-%d %H:%M:%S')
+            self.lastProgramTime_description.config(text=displayTimeStr, fg='#4caf50')
 ##        if something:
 ##            self.currentPacingMode_description.config(text="(This will state the current pacing mode)", fg='#4caf50')
 
