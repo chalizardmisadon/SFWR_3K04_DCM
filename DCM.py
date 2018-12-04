@@ -475,7 +475,7 @@ class appDCM:
         self.resetButton.grid(row=7, column=0, padx=5, sticky=W+E+N+S)
         self.confirmButton = ttk.Button(self.paceSettingFrame, text="Save", command=lambda:self.writeUserData(self.currentUsername))
         self.confirmButton.grid(row=7, column=1, padx=5, sticky=W+E)
-        self.uploadButton = ttk.Button(self.paceSettingFrame, text="Upload")
+        self.uploadButton = ttk.Button(self.paceSettingFrame, text="Upload", command=lambda:self.serialWriteParameter())
         self.uploadButton.grid(row=7, column=2, padx=5, sticky=W+E)
 
         #display stored user data
@@ -578,23 +578,29 @@ class appDCM:
 
     def serialEchoID(self):
         try:
-            echoIDByte = str.encode(echoIDStr)
-            self.port.write(echoIDByte)
+            self.echoIDByte = str.encode(echoIDStr)
         except:
-            echoIDStr = "\x16\x33" + "\x00"*38
-            echoIDByte = str.encode(echoIDStr)
-            port.write(echoIDByte)
+            self.echoIDStr = "\x16\x33" + "\x00"*38
+            self.echoIDByte = str.encode(echoIDStr)
+        port.write(echoIDByte)
 
     def serialEchoParameter(self):
         try:    
-            echoParameterByte = str.encode(echoParameterStr)
-            self.port.write(echoParameterByte)
+            self.echoParameterByte = str.encode(echoParameterStr)
         except:
-            echoParameterStr = "\x16\x22" + "\x00"*38
-            echoParameterByte = str.encode(echoParameterStr)
-            port.write(echoParameterByte)
+            self.echoParameterStr = "\x16\x22" + "\x00"*38
+            self.echoParameterByte = str.encode(echoParameterStr)
+        port.write(echoParameterByte)
         
-        
+    def serialWriteParameter(self):
+        try:
+            writeParameterByte = str.encode(writeParameterStr)
+        except:
+            writeParameterStr = "\x16\x55"
+            writeParameterByte = str.encode(writeParameterStr)
+        modeStr = programModeCombobox.get()
+        print(modeStr, type(modeStr))
+##            self.port.write(writeParameterByte)
 
     
     #egram ==============================================================================================================================================
