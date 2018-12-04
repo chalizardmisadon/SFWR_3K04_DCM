@@ -23,6 +23,13 @@ class appDCM:
     #userdata file and directory =================
     userDirectory = "./user"
     userloginFile = "/userlogin.json"
+
+    #serial communication ========================
+    self.uartPort = {}
+    self.port = False
+    
+    echoIDStr = "\x16\x33" + "\x00"*38
+    resetIDStr = "\x16\x35" + "\x00"*38
     
     def __init__(self):
         #pre-program check for necessary files and variables ==================
@@ -625,8 +632,43 @@ class appDCM:
             print("program screen created successfully")
             return True
         
+#serial communication ===============================================================================================================================
+    def listValidComPort(self):
+        portDescription = "UART"
+        comPort = serial.tools.list_ports.grep(portDescription)
+        self.uartPort = {}
+        for p in comPort:
+            self.uartPort[p.device] = p.description
+        return bool(self.uartPort)
+    
+    def getValidPacemaker(self):
+        for p in self.uartPort:
+            self.port = serial.Serial(port=p, baudrate=115200)
+            self.port.timeout = 1
+            self.serialEchoID(self.port)
+            self.pacemakerID = str(self.serialReadData(self.port))
+            print(self.pacemakerID, type(self.pacemakerID))
+            if "42069" in self.pacemakerID:
+                print(p, "is a valid pacemaker")
+                return True
+            else:
+                print(p, "is not valid pacemaker")
+        return False
 
-    #electrogram tab
+    def serialEchoID(self, port):
+        try:
+            echoIDByte = str.encode(echoIDStr)
+            port.write(echoIDByte)
+        except:
+            echoIDStr = "\x16\x33" + "\x00"*38
+            echoIDByte = str.encode(echoIDStr)
+            port.write(echoIDByte)
+
+    def serialReadData(self, port):
+        return port.read(40)
+
+    
+    #egram ==============================================================================================================================================
     pulseplot = False
 
     def change_state(self):
