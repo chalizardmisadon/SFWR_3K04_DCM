@@ -402,8 +402,8 @@ class appDCM:
 
             #create pace setting notebook
             self.createPaceSettingNotebook()
-            self.createEgram()              #display electrogram
-            self.createBoardDetails()       #display board details
+            self.createEgramNotebook()              #display electrogram
+            self.createBoardDetailsNotebook()       #display board details
             
             #display screen
             self.displayScreen("programScreen")
@@ -608,7 +608,7 @@ class appDCM:
     style.use("ggplot")
     xar = [0, 0.1]
     yar = [0, 0]
-    def createEgram(self):
+    def createEgramNotebook(self):
         self.fig = plt.Figure()
         self.ax = self.fig.add_subplot(111)
         self.ax.grid()

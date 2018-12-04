@@ -1,8 +1,9 @@
 import serial
 import serial.tools.list_ports
 import time
+import struct
 
-'''
+
 ser = serial.Serial(port="COM4", baudrate=115200)
 
 echoParameterStr = "\x16\x22" + "\x00"*38
@@ -13,6 +14,9 @@ echoIDByte = str.encode(echoIDStr)
 
 resetIDStr = "\x16\x35" + "\x00"*38
 resetIDByte = str.encode(resetIDStr)
+
+egramStartStr = "\x16\x66" + "\x00"*38
+egramStartByte = str.encode(egramStartStr)
 
 writeZeroStr = "\x16\x55" + "VVIR" + "\x00"*34
 writeZeroByte = str.encode(writeZeroStr)
@@ -69,15 +73,26 @@ testCmd = str.encode("\x16\x45\x55\x01" + "\x00"*54)
 
 ##print(ser.write(resetIDByte))
 
-##print(ser.write(cmdByte))
+print(ser.write(egramStartByte))
+while True:
+    inData = ser.read(40)
+    A1 = chr(inData[0])
+    Anum1 = struct.unpack('<d', inData[1:9])[0]
+    B1 = chr(inData[9])
+    Bnum1 = struct.unpack('<d', inData[10:18])[0]
+    A2 = chr(inData[18])
+    Anum2 = struct.unpack('<d', inData[19:27])[0]
+    B2 = chr(inData[27])
+    Bnum2 = struct.unpack('<d', inData[28:36])[0]
+    
+    print(A1, Anum1, B1, Bnum1, A2, Anum2, B2, Bnum2)
+    print(type(Anum1))
+
+##
+##time.sleep(2)
+##print(ser.write(echoIDByte))
 ##inData = ser.read(40)
-##print(inData, len(inData))
-
-
-time.sleep(2)
-print(ser.write(echoIDByte))
-inData = ser.read(40)
-print(inData, len(inData), type(inData))
+##print(inData, len(inData), type(inData))
 
 
 def serialEchoID():
@@ -129,17 +144,17 @@ def serialWriteParameter():
     cmdByte = SYNC + WRITE + modeByte + intByte
     print(ser.write(cmdByte))
     time.sleep(1)
-'''
+
 
 '''
-comPort = serial.tools.list_ports.grep("UART")
-uartPort = {}
-for p in comPort:
-    uartPort[p.device] = p.description
-print(uartPort)
-print(bool(uartPort))
-for p in uartPort:
-    print(p)
+##comPort = serial.tools.list_ports.grep("UART")
+##uartPort = {}
+##for p in comPort:
+##    uartPort[p.device] = p.description
+##print(uartPort)
+##print(bool(uartPort))
+##for p in uartPort:
+##    print(p)
 
         
 ##print([[p.description, p.device] for p in comPort])
@@ -152,6 +167,7 @@ ser.timeout = 0.1
 inData = ser.read(40)
 print(inData, len(inData))
 '''
+
 
 class appDCM:
 
@@ -186,8 +202,8 @@ class appDCM:
     def serialReadData(self, port):
         return port.read(40)
 
-login = appDCM()
-print(login.listValidComPort())
-login.getValidPacemaker()
-time.sleep(2)
-print(login.port)
+##login = appDCM()
+##print(login.listValidComPort())
+##login.getValidPacemaker()
+##time.sleep(2)
+##print(login.port)
