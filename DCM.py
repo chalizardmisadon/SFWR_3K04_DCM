@@ -35,15 +35,19 @@ class appDCM:
     defaultParameterDictionary = {}
     fieldDictionary = {}
 
+    #board details variables =====================
+    boardPaceDictionary = {}
+
     #serial communication ========================
     uartPort = {}
     port = False
-    pacemakerID = b''
-    pacemakerMode = b''
     
     echoIDStr = "\x16\x33" + "\x00"*38
     resetIDStr = "\x16\x35" + "\x00"*38
     echoParameterStr = "\x16\x22" + "\x00"*38
+    
+    #egram communication =========================
+    egramTransmit = False
     
     def __init__(self):
         #pre-program check for necessary files and variables ==================
@@ -175,10 +179,13 @@ class appDCM:
             self.logoFrame.columnconfigure(0, weight=1)
             self.addScreen("logoScreen", self.logoFrame)
 
-            if os.path.exists(self.imageDirectory): #if img directory exist
+            try:
+##            if os.path.exists(self.imageDirectory): #if img directory exist
                 self.MacEngLogoImg = PhotoImage(file=self.imageDirectory+self.logoFile).subsample(2, 2)
                 self.MacEngLogoLabel = Label(self.logoFrame, image=self.MacEngLogoImg)
                 self.MacEngLogoLabel.grid(row=0, pady=5)
+            except:
+                pass
             
             self.companyName = Label(self.logoFrame, text="Spontaneous Cardiac Arrest Ltd.")
             self.companyName.grid(row=1)
@@ -422,7 +429,7 @@ class appDCM:
         self.programModeCombobox.grid(row=0, column=1)
         self.pacingModeFrame.grid(row=0, column=0)
 
-        self.programModeCombobox['values'] = ('OFF', 'AAT', 'VVT', 'AOO', 'AAI', 'VOO', 'VVI', 'VDD', 'DOO', 'DDI', 'AOOR', 'AAIR', 'VOOR', 'VVIR', 'DOOR', 'DDIR')
+        self.programModeCombobox['values'] = ('OOOO', 'AATO', 'VVTO', 'AOOO', 'AAIO', 'VOOO', 'VVIO', 'VDDO', 'DOOO', 'DDIO', 'AOOR', 'AAIR', 'VOOR', 'VVIR', 'DOOR', 'DDIR')
         
         #parameters range
         self.parameterDictionary["Lower Rate Limit"] = list(range(30, 50, 5)) + list(range(50, 90, 1)) + list(range(90, 176, 5))
@@ -464,6 +471,7 @@ class appDCM:
         #display all parameters
         rowGrid = 1
         columnGrid = 0
+        print("create entry fields")
         for param in self.parameterDictionary:
             self.createField(param, self.parameterDictionary[param])
             self.fieldDictionary[param]['frame'].grid(row=rowGrid, column=columnGrid)
@@ -481,6 +489,7 @@ class appDCM:
         self.uploadButton.grid(row=7, column=2, padx=5, sticky=W+E)
 
         #display stored user data
+        print("reading user data...")
         self.readUserData(self.currentUsername)
 
     #pace setting notebook ======================================================================================================================================
@@ -490,8 +499,30 @@ class appDCM:
         self.fieldDictionary[string]['label'] = Label(self.fieldDictionary[string]['frame'], width=18, text=string+extra)
         self.fieldDictionary[string]['variable'] = StringVar()
         self.fieldDictionary[string]['spinbox'] = Spinbox(self.fieldDictionary[string]['frame'], values=array, width=8, textvariable=self.fieldDictionary[string]['variable'])
+
+        #griding the value
         self.fieldDictionary[string]['label'].grid(row=0, column=0, padx=5, pady=5)
         self.fieldDictionary[string]['spinbox'].grid(row=0, column=1, padx=5, pady=5)
+
+        #assign trace function (must be assigned after creating spinbox)
+        self.fieldDictionary[string]['variable'].trace('w', self.checkValidValue)
+
+
+    def checkValidValue(self, tkVarStr, tkVarIndex, operation):
+##        print("hello", 1, tkVarStr, type(tkVarStr), 2, tkVarIndex, 3, operation)
+        for param in self.fieldDictionary:
+            if tkVarStr == str(self.fieldDictionary[param]['variable']):
+                self.fieldDictionary[param]['spinbox'].config(bg="white") #reset color
+        
+                if not self.fieldDictionary[param]['variable'].get().isdigit(): #if there is non-digit character
+                    self.fieldDictionary[param]['spinbox'].config(bg="red")
+                    return
+
+                intVar = int(self.fieldDictionary[param]['variable'].get()) #get integer value
+                if not (self.parameterDictionary[param][0] <= intVar and intVar <= self.parameterDictionary[param][-1]):
+                    self.fieldDictionary[param]['spinbox'].config(bg="red")
+                    return
+                return
 
     def validCheck(self):
         errorMsg = ""
@@ -505,6 +536,7 @@ class appDCM:
         if not (errorMsg == ""):
             messagebox.showerror("Value Error", errorMsg)
             return False
+        print("all valid values")
         return True
 
     def readUserData(self, username):
@@ -547,7 +579,6 @@ class appDCM:
             self.fieldDictionary[param]['variable'].set(self.defaultParameterDictionary[param])
         print("user data has been reset to default values")
         
-#======================================================================================================================================        
     #serial communication ===============================================================================================================================
     def listValidComPort(self):
         portDescription = "UART"
@@ -576,63 +607,76 @@ class appDCM:
         return False
     
     def serialReadData(self):
-        return self.port.read(40)
+        if self.port:
+            return self.port.read(40)
+
+    def serialWriteData(self, byte):
+        if self.port:
+            self.port.write(byte)
+            time.sleep(0.1)
 
     def serialEchoID(self):
-        self.echoIDStr = "\x16\x33" + "\x00"*38
-        self.echoIDByte = str.encode(self.echoIDStr)
-        self.port.write(self.echoIDByte)
+        if self.port:
+            self.echoIDStr = "\x16\x33" + "\x00"*38
+            self.echoIDByte = str.encode(self.echoIDStr)
+            self.serialWriteData(self.echoIDByte)
 
     def serialStartEgram(self):
-        self.startEgramStr = "\x16\x66" + "\x00"*38
-        self.startEgramByte = str.encode(self.startEgramStr)
-        self.port.write(self.startEgramByte)
+        if self.port:
+            self.startEgramStr = "\x16\x66" + "\x00"*38
+            self.startEgramByte = str.encode(self.startEgramStr)
+            self.serialWriteData(self.startEgramByte)
+
+    def serialStopEgram(self):
+        if self.port:
+            self.stopEgramStr = "\x16\x68" + "\x00"*38
+            self.stopEgramByte = str.encode(self.stopEgramStr)
+            self.serialWriteData(self.stopEgramByte)
 
     def serialEchoParameter(self):
-        self.echoParameterStr = "\x16\x22" + "\x00"*38
-        self.echoParameterByte = str.encode(self.echoParameterStr)
-        self.port.write(self.echoParameterByte)
+        if self.port:
+            self.echoParameterStr = "\x16\x22" + "\x00"*38
+            self.echoParameterByte = str.encode(self.echoParameterStr)
+            self.serialWriteData(self.echoParameterByte)
         
     def serialWriteParameter(self):
-        if self.validCheck():
-            self.writeParameterStr = "\x16\x55"
-            self.writeParameterByte = str.encode(self.writeParameterStr)
+        if self.port:
+            if self.validCheck():
+                self.writeParameterStr = "\x16\x55"
+                self.writeParameterByte = str.encode(self.writeParameterStr)
 
-            self.modeStr = self.programModeCombobox.get()
-            self.modeByte = str.encode(self.modeStr)
+                self.modeStr = self.programModeCombobox.get()
+                self.modeByte = str.encode(self.modeStr)
 
-            self.intArray = []
-            for param in self.fieldDictionary:
-                self.intArray.append(int(self.fieldDictionary[param]['variable'].get()))
-            self.intArrayByte = [ i.to_bytes(2, 'little') for i in self.intArray ]
+                self.intArray = []
+                for param in self.fieldDictionary:
+                    self.intArray.append(int(self.fieldDictionary[param]['variable'].get()))
+                self.intArrayByte = [ i.to_bytes(2, 'little') for i in self.intArray ]
 
-            self.intByte = b''
-            for i in self.intArrayByte:
-                self.intByte = self.intByte + i
+                self.intByte = b''
+                for i in self.intArrayByte:
+                    self.intByte = self.intByte + i
 
-            self.cmdByte = self.writeParameterByte + self.modeByte + self.intByte
-            print(self.cmdByte)
-            self.port.write(self.cmdByte)
-            time.sleep(0.1)
-            self.serialEchoParameter()
-            print(self.serialReadData())
-            return True
+                self.cmdByte = self.writeParameterByte + self.modeByte + self.intByte
+                print("command to send", self.cmdByte)
+                self.serialWriteData(self.cmdByte)
+                time.sleep(0.1)
+                self.serialEchoParameter()
+                print(self.serialReadData())
+                print("upload to board successfully")
+                return True
+            else:
+                return False
         else:
+            messagebox.showerror("No board detected", "No valid pacemaker has been detected")
             return False
     
     #egram ==============================================================================================================================================
-    pulseplot = False
-
-    def change_state(self):
-        if appDCM.pulseplot == True:
-            appDCM.pulseplot = False
-        else:
-            appDCM.pulseplot = True
-
     style.use("ggplot")
     xar = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     yar = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     yar2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    
     def createEgramNotebook(self):
         self.fig = plt.Figure()
         self.fig.suptitle('Live Electrogram', fontsize=14)
@@ -640,7 +684,7 @@ class appDCM:
         self.ax.grid()
         self.line, = self.ax.plot(appDCM.xar, appDCM.yar, label="VENT")
         self.line2, = self.ax.plot(appDCM.xar, appDCM.yar2, label="ATR")
-        self.ax.set_ylim(-4, 4) 
+        self.ax.set_ylim(-0.5, 3.5) 
         self.graph = FigureCanvasTkAgg(self.fig, master=self.egramFrame)
         self.graph.get_tk_widget().pack(side=BOTTOM, padx=15, pady=15)
         self.ax.legend(loc='upper left', fontsize='x-small')
@@ -648,117 +692,136 @@ class appDCM:
         self.stopstartButton = ttk.Button(self.egramFrame, text="Start/Stop", command=lambda:self.gui_handler())
         self.stopstartButton.pack(side=TOP)
         self.graph.draw()
-    
+
+    goodReading = True
     def refresh(self):
-        if appDCM.pulseplot == True:
-            appDCM.xar = np.append(appDCM.xar, appDCM.xar[-1]+0.1)
+        if self.egramTransmit:
+            self.xar = np.append(self.xar, self.xar[-1]+0.1)
+            self.xar = np.append(self.xar, self.xar[-1]+0.1)
 
-##            inData = self.serialReadData()
-##            if len(inData) >= 40:
-##                A1 = chr(inData[0])
-##                Anum1 = struct.unpack('<d', inData[1:9])[0]
-##                B1 = chr(inData[9])
-##                Bnum1 = struct.unpack('<d', inData[10:18])[0]
-##                A2 = chr(inData[18])
-##                Anum2 = struct.unpack('<d', inData[19:27])[0]
-##                B2 = chr(inData[27])
-##                Bnum2 = struct.unpack('<d', inData[28:36])[0]
-##            
-##
-##                appDCM.yar = np.append(appDCM.yar, A1)
-##                appDCM.yar2 = np.append(appDCM.yar2, B1)
-##
-##                appDCM.yar = np.append(appDCM.yar, A2)
-##                appDCM.yar2 = np.append(appDCM.yar2, B2)
+            #read serial info
+            inData = self.serialReadData()
+            A1 = chr(inData[0])
+            Anum1 = struct.unpack('<d', inData[1:9])[0] *3.3
+            V1 = chr(inData[9])
+            Vnum1 = struct.unpack('<d', inData[10:18])[0] *3.3
+            A2 = chr(inData[18])
+            Anum2 = struct.unpack('<d', inData[19:27])[0] *3.3
+            V2 = chr(inData[27])
+            Vnum2 = struct.unpack('<d', inData[28:36])[0] *3.3
 
-                
-            appDCM.yar = np.append(appDCM.yar, np.sin(appDCM.xar[-1]))
-            appDCM.yar2 = np.append(appDCM.yar2, np.cos(appDCM.xar[-1]))
+##            print(A1, Anum1, B1, Bnum1, A2, Anum2, B2, Bnum2)
+##            print(type(Anum1), type(np.sin(self.xar[-1])) )
+
+            #valid atrium reading
+            self.goodReading = True
+            if A1 == 'A':
+                self.yar = np.append(self.yar, Anum1)
+            else:
+                self.yar = np.append(self.yar, 0.0)
+                self.goodReading = False
+
+            if A2 == 'A':
+                self.yar = np.append(self.yar, Anum2)
+            else:
+                self.yar = np.append(self.yar, 0.0)
+                self.goodReading = False
+
+            #valid ventricle reading
+            if V1 == 'V':
+                self.yar2 = np.append(self.yar2, Vnum1)
+            else:
+                self.yar2 = np.append(self.yar2, 0.0)
+                self.goodReading = False
+
+            if V2 == 'V':
+                self.yar2 = np.append(self.yar2, Vnum2)
+            else:
+                self.yar2 = np.append(self.yar2, 0.0)
+                self.goodReading = False
+
             
-            self.ax.set_xlim(appDCM.xar[-1]-10, appDCM.xar[-1])
+##            self.yar = np.append(self.yar, np.sin(self.xar[-1]))
+##            self.yar2 = np.append(self.yar2, np.cos(self.xar[-2]))
+##            self.yar2 = np.append(self.yar2, np.cos(self.xar[-1]))
+            
+            self.ax.set_xlim(self.xar[-1]-10, self.xar[-1])
 
-            self.line.set_data(appDCM.xar,appDCM.yar)
-            self.line2.set_data(appDCM.xar,appDCM.yar2)
+            self.line.set_data(self.xar,self.yar)
+            self.line2.set_data(self.xar,self.yar2)
             self.graph.draw()
-            if len(appDCM.xar)>100:
-                appDCM.xar=np.delete(appDCM.xar, 0) 
-                appDCM.yar=np.delete(appDCM.yar, 0) 
-                appDCM.yar2=np.delete(appDCM.yar2, 0)
-##            print(appDCM.yar)
-            self.root.after(1, self.refresh)
+            if len(self.xar)>100:
+                self.xar=np.delete(self.xar, 0) 
+                self.yar=np.delete(self.yar, 0) 
+                self.yar2=np.delete(self.yar2, 0)
+
+            #if still egram
+            if self.egramTransmit:
+                self.recalibrateEgram()
+                self.root.after(1, self.refresh)
+
+    def recalibrateEgram(self):
+        if self.goodReading:
+            print("good reading")
+        else:
+            print("bad egram data")
+            self.serialStopEgram()
+            time.sleep(0.1)
+            self.port.reset_input_buffer()
+            self.serialWriteEgram()
 
     def gui_handler(self):
-        self.change_state()
-        self.serialStartEgram()
-        self.refresh()
+        if self.port:
+            self.egramTransmit = not self.egramTransmit
+            if self.egramTransmit:
+                self.serialStartEgram()
+                self.refresh()
+            else:
+                self.serialStopEgram()
+                time.sleep(0.1)
+                self.port.reset_input_buffer()
+        else:
+            messagebox.showerror("No board detected", "No valid pacemaker has been detected")
+            
+##        while True:
+##            inData = self.port.read(40)
+##            A1 = chr(inData[0])
+##            Anum1 = struct.unpack('<d', inData[1:9])[0]
+##            B1 = chr(inData[9])
+##            Bnum1 = struct.unpack('<d', inData[10:18])[0]
+##            A2 = chr(inData[18])
+##            Anum2 = struct.unpack('<d', inData[19:27])[0]
+##            B2 = chr(inData[27])
+##            Bnum2 = struct.unpack('<d', inData[28:36])[0]
+##            
+##            print(A1, Anum1, B1, Bnum1, A2, Anum2, B2, Bnum2)
+##            print(type(Anum1))
 
-    #board details tab
+
+    #board details =======================================================================================================================================
     def createBoardDetailsNotebook(self): 
-        self.DCM_version_label = Label(self.aboutAppFrame, width=20, text="DCM version: "+appDCM.versionNumber, font=self.fontDictionary["loginFont"], relief=RIDGE)
+        #creating frames for notebook
         self.TelemetryStatusFrame = LabelFrame(self.aboutAppFrame, bd=1, labelanchor=N, text="Telemetry Status", font='Arial 14', relief=RIDGE, pady=20)
         self.TelemetryStatusFrame.pack(pady=20, padx=10)
-        self.BoardPaceSettingFrame = LabelFrame(self.aboutAppFrame, bd=1, labelanchor=N, text="Current Pace Settings", font='Arial 14', relief=RIDGE, padx=15, pady=15)
-        self.BoardPaceSettingFrame.pack()
+        self.boardPaceSettingFrame = LabelFrame(self.aboutAppFrame, bd=1, labelanchor=N, text="Current Pace Settings", font='Arial 14', relief=RIDGE, padx=15, pady=15)
+        self.boardPaceSettingFrame.pack()
+
+        self.DCM_version_label = Label(self.aboutAppFrame, width=20, text="DCM version: "+appDCM.versionNumber, font=self.fontDictionary["loginFont"], relief=RIDGE)
         self.refresh_button = ttk.Button(self.TelemetryStatusFrame, text="Refresh", command=lambda:self.refreshBoardInfo())
 
-        #self.TelemetryStatusTitle = Label(self.TelemetryStatusFrame, text="Telemetry Status", font='Arial 18 bold')
+        #create telemetry labels
         self.COM_Port_label = Label(self.TelemetryStatusFrame, text="COM Port:")
         self.Pacemaker_Connection_label = Label(self.TelemetryStatusFrame, text="Pacemaker:")
         self.Last_Program_Time_label = Label(self.TelemetryStatusFrame, text="Last Program Time:")
         self.Current_Pacing_Mode_label = Label(self.TelemetryStatusFrame, text="Current Pacing Mode:")
 
+        #default telemetry status
         self.comport_description = Label(self.TelemetryStatusFrame, text="No device was found.", fg='#f44336')#, justify=RIGHT)
         self.pacemaker_description = Label(self.TelemetryStatusFrame, text="No pacemaker was detected.", fg='#f44336')#, justify=LEFT)
         self.lastProgramTime_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0')#, justify=LEFT)
         self.currentPacingMode_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0')#, justify=LEFT)
 
-        self.LowerRateLimit_label = Label(self.BoardPaceSettingFrame, text="Lower Rate Limit:")
-        self.LowerRateLimit_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.UpperRateLimit_label = Label(self.BoardPaceSettingFrame, text="Upper Rate Limit:")
-        self.UpperRateLimit_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.MaximumSensorRate_label = Label(self.BoardPaceSettingFrame, text="Maximum Sensor Rate:")
-        self.MaximumSensorRate_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.FixedAVDelay_label = Label(self.BoardPaceSettingFrame, text="Fixed AV Delay:")
-        self.FixedAVDelay_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.AtrialAmplitude_label = Label(self.BoardPaceSettingFrame, text="Atrial Amplitude:")
-        self.AtrialAmplitude_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.VentricularAmplitude_label = Label(self.BoardPaceSettingFrame, text="Ventricular Amplitude:")
-        self.VentricularAmplitude_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.AtrialPulseWidth_label = Label(self.BoardPaceSettingFrame, text="Atrial Pulse Width:")
-        self.AtrialPulseWidth_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.VentricularPulseWidth_label = Label(self.BoardPaceSettingFrame, text="Ventricular Pulse Width:")
-        self.VentricularPulseWidth_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.AtrialSensitivity_label = Label(self.BoardPaceSettingFrame, text="Atrial Sensitivity:")
-        self.AtrialSensitivity_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.VentricularSensitivity_label = Label(self.BoardPaceSettingFrame, text="Ventricular Sensitivity:")
-        self.VentricularSensitivity_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.VRP_label = Label(self.BoardPaceSettingFrame, text="VRP:")
-        self.VRP_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.ARP_label = Label(self.BoardPaceSettingFrame, text="ARP:")
-        self.ARP_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.PVARP_label = Label(self.BoardPaceSettingFrame, text="PVARP:")
-        self.PVARP_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.ActivityThreshold_label = Label(self.BoardPaceSettingFrame, text="Activity Threshold:")
-        self.ActivityThreshold_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.ReactionTime_label = Label(self.BoardPaceSettingFrame, text="Reaction Time:")
-        self.ReactionTime_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.ResponseFactor_label = Label(self.BoardPaceSettingFrame, text="Response Factor:")
-        self.ResponseFactor_value = Label(self.BoardPaceSettingFrame, text="-")
-        self.RecoveryTime_label = Label(self.BoardPaceSettingFrame, text="Recovery Time:")
-        self.RecoveryTime_value = Label(self.BoardPaceSettingFrame, text="-")
-        
-        
-
-        if os.path.exists(self.imageDirectory): #if img directory exist
-            self.connectedImg = PhotoImage(file=self.imageDirectory+self.connected)
-            self.disconnectedImg = PhotoImage(file=self.imageDirectory+self.disconnected)
-            self.refreshImg = PhotoImage(file=self.imageDirectory+self.refresh_pic).subsample(2, 2)
-            self.comport_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
-            self.pacemaker_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
-            self.refresh_button.config(image=self.refreshImg, compound="left")
-        
         #display labels
-        self.refresh_button.grid(row=3, columnspan=6)
         self.DCM_version_label.pack(side=BOTTOM)
         self.COM_Port_label.grid(row=1, column=1, pady=5, sticky=W)
         self.Pacemaker_Connection_label.grid(row=1, column=4, pady=5, sticky=W)
@@ -768,50 +831,62 @@ class appDCM:
         self.pacemaker_description.grid(row=1, column=5, pady=5, sticky=W)
         self.lastProgramTime_description.grid(row=2, column=2, pady=5, padx=20, sticky=W)
         self.currentPacingMode_description.grid(row=2, column=5, pady=5, sticky=W)
-        self.comport_connectionImgLabel.grid(row=1, column=0, pady=5, sticky=W)
-        self.pacemaker_connectionImgLabel.grid(row=1, column=3, pady=5, sticky=E)
 
-        self.LowerRateLimit_label.grid(row=0, column=0)
-        self.LowerRateLimit_value.grid(row=0, column=1, padx=15)
-        self.UpperRateLimit_label.grid(row=1, column=0)
-        self.UpperRateLimit_value.grid(row=1, column=1, padx=15)
-        self.MaximumSensorRate_label.grid(row=2, column=0)
-        self.MaximumSensorRate_value.grid(row=2, column=1, padx=15)
-        self.FixedAVDelay_label.grid(row=3, column=0)
-        self.FixedAVDelay_value.grid(row=3, column=1, padx=15)
-        self.AtrialAmplitude_label.grid(row=4, column=0)
-        self.AtrialAmplitude_value.grid(row=4, column=1, padx=15)
-        self.VentricularAmplitude_label.grid(row=5, column=0)
-        self.VentricularAmplitude_value.grid(row=5, column=1, padx=15)
-        self.AtrialPulseWidth_label.grid(row=0, column=2)
-        self.AtrialPulseWidth_value.grid(row=0, column=3, padx=15)
-        self.VentricularPulseWidth_label.grid(row=1, column=2)
-        self.VentricularPulseWidth_value.grid(row=1, column=3, padx=15)
-        self.AtrialSensitivity_label.grid(row=2, column=2)
-        self.AtrialSensitivity_value.grid(row=2, column=3, padx=15)
-        self.VentricularSensitivity_label.grid(row=3, column=2)
-        self.VentricularSensitivity_value.grid(row=3, column=3, padx=15)
-        self.VRP_label.grid(row=4, column=2)
-        self.VRP_value.grid(row=4, column=3, padx=15)
-        self.ARP_label.grid(row=5, column=2)
-        self.ARP_value.grid(row=5, column=3, padx=15)
-        self.PVARP_label.grid(row=0, column=4)
-        self.PVARP_value.grid(row=0, column=5, padx=15)
-        self.ActivityThreshold_label.grid(row=1, column=4)
-        self.ActivityThreshold_value.grid(row=1, column=5, padx=15)
-        self.ReactionTime_label.grid(row=2, column=4)
-        self.ReactionTime_value.grid(row=2, column=5, padx=15)
-        self.ResponseFactor_label.grid(row=3, column=4)
-        self.ResponseFactor_value.grid(row=3, column=5, padx=15)
-        self.RecoveryTime_label.grid(row=4, column=4)
-        self.RecoveryTime_value.grid(row=4, column=5, padx=15)
+        #get pictures
+        try:
+##        if os.path.exists(self.imageDirectory): #if img directory exist
+            self.connectedImg = PhotoImage(file=self.imageDirectory+self.connected)
+            self.disconnectedImg = PhotoImage(file=self.imageDirectory+self.disconnected)
+            self.refreshImg = PhotoImage(file=self.imageDirectory+self.refresh_pic).subsample(2, 2)
+            self.comport_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
+            self.pacemaker_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
+            self.refresh_button.config(image=self.refreshImg, compound="left")
+
+            #display picture
+            self.comport_connectionImgLabel.grid(row=1, column=0, pady=5, sticky=W)
+            self.pacemaker_connectionImgLabel.grid(row=1, column=3, pady=5, sticky=E)
+            self.refresh_button.grid(row=3, columnspan=6)
+        except:
+            pass
+
+        #display all parameters
+        rowGrid = 0
+        columnGrid = 0
+        print("create display board info")
+        for param in self.parameterDictionary:
+            self.createBoardPaceDetail(param)
+            self.boardPaceDictionary[param]['label'].grid(row = rowGrid, column = columnGrid)
+            self.boardPaceDictionary[param]['value'].grid(row = rowGrid, column = columnGrid + 1)
+            rowGrid = rowGrid + 1
+            if (rowGrid >= 6):
+                rowGrid = 0
+                columnGrid = columnGrid + 2
+
+
+
+    def createBoardPaceDetail(self, string):
+        self.boardPaceDictionary[string] = {}
+        self.boardPaceDictionary[string]['label'] = Label(self.boardPaceSettingFrame, text=string)
+        self.boardPaceDictionary[string]['variable'] = StringVar()
+        self.boardPaceDictionary[string]['value'] = Label(self.boardPaceSettingFrame, textvariable=self.boardPaceDictionary[string]['variable'])
+        self.boardPaceDictionary[string]['variable'].set("-")
+
+        #griding the value
+        self.boardPaceDictionary[string]['label'].grid(row=0, column=0, padx=15)
+        self.boardPaceDictionary[string]['value'].grid(row=0, column=1, padx=15)
 
     def refreshBoardInfo(self):
-        if self.listValidComPort():
-            self.comport_description.config(text="UART device detected", fg='#4caf50')
-            self.comport_connectionImgLabel.config(image=self.connectedImg)
+        if self.port == False:
+            if self.listValidComPort():
+                self.comport_description.config(text="UART device detected", fg='#4caf50')
+                self.comport_connectionImgLabel.config(image=self.connectedImg)
 
-        if self.getValidPacemaker():
+            if self.getValidPacemaker():
+                self.readBoardInfo()
+        else:
+            self.readBoardInfo()
+
+    def readBoardInfo(self):
             displayID = self.pacemakerID[5:30].decode("utf-8").rstrip('\0')
             print(displayID, type(displayID))
             self.pacemaker_description.config(text="Detected: " + displayID, fg='#4caf50')
@@ -823,10 +898,17 @@ class appDCM:
 
             #get pacemaker parameters
             self.serialEchoParameter()
-            self.pacemakerMode = self.serialReadData()
-            
-##        if something:
-##            self.currentPacingMode_description.config(text="(This will state the current pacing mode)", fg='#4caf50')
+            pacemakerData = self.serialReadData()
+            pacemakerMode = pacemakerData[:4].decode("utf-8")
+##            print(self.pacemakerData, type(self.pacemakerData), len(self.pacemakerData[4:-2]))
+            numOfInt = 'h'*17
+            pacemakerInt = struct.unpack('<'+numOfInt, pacemakerData[4:-2])
+##            print(pacemakerMode)
+
+            #set pacemaker parameters
+            self.currentPacingMode_description.config(text=pacemakerMode, fg='#4caf50')
+            for intVar, param in zip(pacemakerInt, self.boardPaceDictionary):
+                self.boardPaceDictionary[param]['variable'].set(str(intVar))
 
 
 
