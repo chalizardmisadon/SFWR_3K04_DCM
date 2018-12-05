@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 import serial.tools.list_ports      #for serial communication
 import serial                       #for serial communication
+import struct
 import json     #for user data storage
 import os       #for directory pathing
 import base64   #for password hiding
@@ -23,6 +24,7 @@ class appDCM:
     logoFile = "/MacFireball.png"
     connected = "/connected.png"
     disconnected = "/disconnected.png"
+    refresh_pic = "/refresh.png"
 
     #userdata file and directory =================
     userDirectory = "./user"
@@ -557,19 +559,19 @@ class appDCM:
     
     def getValidPacemaker(self):
         for p in self.uartPort:
-            try:
-                self.port = serial.Serial(port=p, baudrate=115200)
-                self.port.timeout = 1
-                self.serialEchoID()
-                self.pacemakerID = self.serialReadData()
-                print(self.pacemakerID, type(self.pacemakerID))
-                if str.encode("42069") in self.pacemakerID:
-                    print(p, "is a valid pacemaker")
-                    return True
-                else:
-                    print(p, "is not valid pacemaker")
-            except:
-                print(p, "is not a valid serial port")
+##            try:
+            self.port = serial.Serial(port=p, baudrate=115200)
+            self.port.timeout = 1
+            self.serialEchoID()
+            self.pacemakerID = self.serialReadData()
+            print(self.pacemakerID, type(self.pacemakerID))
+            if str.encode("42069") in self.pacemakerID:
+                print(p, "is a valid pacemaker")
+                return True
+            else:
+                print(p, "is not valid pacemaker")
+##            except:
+##                print(p, "is not a valid serial port")
         self.port = False
         return False
     
@@ -577,34 +579,50 @@ class appDCM:
         return self.port.read(40)
 
     def serialEchoID(self):
-        try:
-            self.echoIDByte = str.encode(echoIDStr)
-        except:
-            self.echoIDStr = "\x16\x33" + "\x00"*38
-            self.echoIDByte = str.encode(echoIDStr)
-        port.write(echoIDByte)
+        self.echoIDStr = "\x16\x33" + "\x00"*38
+        self.echoIDByte = str.encode(self.echoIDStr)
+        self.port.write(self.echoIDByte)
+
+    def serialStartEgram(self):
+        self.startEgramStr = "\x16\x66" + "\x00"*38
+        self.startEgramByte = str.encode(self.startEgramStr)
+        self.port.write(self.startEgramByte)
 
     def serialEchoParameter(self):
-        try:    
-            self.echoParameterByte = str.encode(echoParameterStr)
-        except:
-            self.echoParameterStr = "\x16\x22" + "\x00"*38
-            self.echoParameterByte = str.encode(echoParameterStr)
-        port.write(echoParameterByte)
+        self.echoParameterStr = "\x16\x22" + "\x00"*38
+        self.echoParameterByte = str.encode(self.echoParameterStr)
+        self.port.write(self.echoParameterByte)
         
     def serialWriteParameter(self):
-        try:
-            writeParameterByte = str.encode(writeParameterStr)
-        except:
-            writeParameterStr = "\x16\x55"
-            writeParameterByte = str.encode(writeParameterStr)
-        modeStr = programModeCombobox.get()
-        print(modeStr, type(modeStr))
-##            self.port.write(writeParameterByte)
+        if self.validCheck():
+            self.writeParameterStr = "\x16\x55"
+            self.writeParameterByte = str.encode(self.writeParameterStr)
 
+            self.modeStr = self.programModeCombobox.get()
+            self.modeByte = str.encode(self.modeStr)
+
+            self.intArray = []
+            for param in self.fieldDictionary:
+                self.intArray.append(int(self.fieldDictionary[param]['variable'].get()))
+            self.intArrayByte = [ i.to_bytes(2, 'little') for i in self.intArray ]
+
+            self.intByte = b''
+            for i in self.intArrayByte:
+                self.intByte = self.intByte + i
+
+            self.cmdByte = self.writeParameterByte + self.modeByte + self.intByte
+            print(self.cmdByte)
+            self.port.write(self.cmdByte)
+            time.sleep(0.1)
+            self.serialEchoParameter()
+            print(self.serialReadData())
+            return True
+        else:
+            return False
     
     #egram ==============================================================================================================================================
     pulseplot = False
+
     def change_state(self):
         if appDCM.pulseplot == True:
             appDCM.pulseplot = False
@@ -612,16 +630,20 @@ class appDCM:
             appDCM.pulseplot = True
 
     style.use("ggplot")
-    xar = [0, 0.1]
-    yar = [0, 0]
+    xar = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    yar = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    yar2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     def createEgramNotebook(self):
         self.fig = plt.Figure()
+        self.fig.suptitle('Live Electrogram', fontsize=14)
         self.ax = self.fig.add_subplot(111)
         self.ax.grid()
-        self.line, = self.ax.plot(appDCM.xar, appDCM.yar)
-        self.ax.set_ylim(-1, 1) 
+        self.line, = self.ax.plot(appDCM.xar, appDCM.yar, label="VENT")
+        self.line2, = self.ax.plot(appDCM.xar, appDCM.yar2, label="ATR")
+        self.ax.set_ylim(-4, 4) 
         self.graph = FigureCanvasTkAgg(self.fig, master=self.egramFrame)
-        self.graph.get_tk_widget().pack(side=BOTTOM, fill=X)
+        self.graph.get_tk_widget().pack(side=BOTTOM, padx=15, pady=15)
+        self.ax.legend(loc='upper left', fontsize='x-small')
 
         self.stopstartButton = ttk.Button(self.egramFrame, text="Start/Stop", command=lambda:self.gui_handler())
         self.stopstartButton.pack(side=TOP)
@@ -630,59 +652,159 @@ class appDCM:
     def refresh(self):
         if appDCM.pulseplot == True:
             appDCM.xar = np.append(appDCM.xar, appDCM.xar[-1]+0.1)
+
+##            inData = self.serialReadData()
+##            if len(inData) >= 40:
+##                A1 = chr(inData[0])
+##                Anum1 = struct.unpack('<d', inData[1:9])[0]
+##                B1 = chr(inData[9])
+##                Bnum1 = struct.unpack('<d', inData[10:18])[0]
+##                A2 = chr(inData[18])
+##                Anum2 = struct.unpack('<d', inData[19:27])[0]
+##                B2 = chr(inData[27])
+##                Bnum2 = struct.unpack('<d', inData[28:36])[0]
+##            
+##
+##                appDCM.yar = np.append(appDCM.yar, A1)
+##                appDCM.yar2 = np.append(appDCM.yar2, B1)
+##
+##                appDCM.yar = np.append(appDCM.yar, A2)
+##                appDCM.yar2 = np.append(appDCM.yar2, B2)
+
+                
             appDCM.yar = np.append(appDCM.yar, np.sin(appDCM.xar[-1]))
+            appDCM.yar2 = np.append(appDCM.yar2, np.cos(appDCM.xar[-1]))
+            
             self.ax.set_xlim(appDCM.xar[-1]-10, appDCM.xar[-1])
-            self.line.set_data(appDCM.xar,appDCM.yar)       
+
+            self.line.set_data(appDCM.xar,appDCM.yar)
+            self.line2.set_data(appDCM.xar,appDCM.yar2)
             self.graph.draw()
-            self.root.after(10, self.refresh)
+            if len(appDCM.xar)>100:
+                appDCM.xar=np.delete(appDCM.xar, 0) 
+                appDCM.yar=np.delete(appDCM.yar, 0) 
+                appDCM.yar2=np.delete(appDCM.yar2, 0)
+##            print(appDCM.yar)
+            self.root.after(1, self.refresh)
 
     def gui_handler(self):
         self.change_state()
+        self.serialStartEgram()
         self.refresh()
 
-    #board details ======================================================================================================================================
-    def createBoardDetailsNotebook(self):
+    #board details tab
+    def createBoardDetailsNotebook(self): 
         self.DCM_version_label = Label(self.aboutAppFrame, width=20, text="DCM version: "+appDCM.versionNumber, font=self.fontDictionary["loginFont"], relief=RIDGE)
-        self.TelemetryStatusFrame = Frame(self.aboutAppFrame, relief=GROOVE)
-        self.TelemetryStatusFrame.pack(padx=30, pady=30, side=TOP)
-        self.TelemetryStatusFrame.columnconfigure(0, weight=2)
-        self.TelemetryStatusFrame.columnconfigure(1, weight=3)
-        self.TelemetryStatusFrame.columnconfigure(2, weight=1)
+        self.TelemetryStatusFrame = LabelFrame(self.aboutAppFrame, bd=1, labelanchor=N, text="Telemetry Status", font='Arial 14', relief=RIDGE, pady=20)
+        self.TelemetryStatusFrame.pack(pady=20, padx=10)
+        self.BoardPaceSettingFrame = LabelFrame(self.aboutAppFrame, bd=1, labelanchor=N, text="Current Pace Settings", font='Arial 14', relief=RIDGE, padx=15, pady=15)
+        self.BoardPaceSettingFrame.pack()
+        self.refresh_button = ttk.Button(self.TelemetryStatusFrame, text="Refresh", command=lambda:self.refreshBoardInfo())
 
-        self.TelemetryStatusTitle = Label(self.TelemetryStatusFrame, text="Telemetry Status", font='Arial 18 bold')
+        #self.TelemetryStatusTitle = Label(self.TelemetryStatusFrame, text="Telemetry Status", font='Arial 18 bold')
         self.COM_Port_label = Label(self.TelemetryStatusFrame, text="COM Port:")
         self.Pacemaker_Connection_label = Label(self.TelemetryStatusFrame, text="Pacemaker:")
         self.Last_Program_Time_label = Label(self.TelemetryStatusFrame, text="Last Program Time:")
         self.Current_Pacing_Mode_label = Label(self.TelemetryStatusFrame, text="Current Pacing Mode:")
 
-        self.comport_description = Label(self.TelemetryStatusFrame, text="No device was found.", fg='#f44336', justify=LEFT)
-        self.pacemaker_description = Label(self.TelemetryStatusFrame, text="No pacemaker was detected.", fg='#f44336', justify=LEFT)
-        self.lastProgramTime_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0', justify=LEFT)
-        self.currentPacingMode_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0', justify=LEFT)
+        self.comport_description = Label(self.TelemetryStatusFrame, text="No device was found.", fg='#f44336')#, justify=RIGHT)
+        self.pacemaker_description = Label(self.TelemetryStatusFrame, text="No pacemaker was detected.", fg='#f44336')#, justify=LEFT)
+        self.lastProgramTime_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0')#, justify=LEFT)
+        self.currentPacingMode_description = Label(self.TelemetryStatusFrame, text="N/A", fg='#A0A0A0')#, justify=LEFT)
+
+        self.LowerRateLimit_label = Label(self.BoardPaceSettingFrame, text="Lower Rate Limit:")
+        self.LowerRateLimit_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.UpperRateLimit_label = Label(self.BoardPaceSettingFrame, text="Upper Rate Limit:")
+        self.UpperRateLimit_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.MaximumSensorRate_label = Label(self.BoardPaceSettingFrame, text="Maximum Sensor Rate:")
+        self.MaximumSensorRate_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.FixedAVDelay_label = Label(self.BoardPaceSettingFrame, text="Fixed AV Delay:")
+        self.FixedAVDelay_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.AtrialAmplitude_label = Label(self.BoardPaceSettingFrame, text="Atrial Amplitude:")
+        self.AtrialAmplitude_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.VentricularAmplitude_label = Label(self.BoardPaceSettingFrame, text="Ventricular Amplitude:")
+        self.VentricularAmplitude_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.AtrialPulseWidth_label = Label(self.BoardPaceSettingFrame, text="Atrial Pulse Width:")
+        self.AtrialPulseWidth_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.VentricularPulseWidth_label = Label(self.BoardPaceSettingFrame, text="Ventricular Pulse Width:")
+        self.VentricularPulseWidth_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.AtrialSensitivity_label = Label(self.BoardPaceSettingFrame, text="Atrial Sensitivity:")
+        self.AtrialSensitivity_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.VentricularSensitivity_label = Label(self.BoardPaceSettingFrame, text="Ventricular Sensitivity:")
+        self.VentricularSensitivity_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.VRP_label = Label(self.BoardPaceSettingFrame, text="VRP:")
+        self.VRP_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.ARP_label = Label(self.BoardPaceSettingFrame, text="ARP:")
+        self.ARP_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.PVARP_label = Label(self.BoardPaceSettingFrame, text="PVARP:")
+        self.PVARP_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.ActivityThreshold_label = Label(self.BoardPaceSettingFrame, text="Activity Threshold:")
+        self.ActivityThreshold_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.ReactionTime_label = Label(self.BoardPaceSettingFrame, text="Reaction Time:")
+        self.ReactionTime_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.ResponseFactor_label = Label(self.BoardPaceSettingFrame, text="Response Factor:")
+        self.ResponseFactor_value = Label(self.BoardPaceSettingFrame, text="-")
+        self.RecoveryTime_label = Label(self.BoardPaceSettingFrame, text="Recovery Time:")
+        self.RecoveryTime_value = Label(self.BoardPaceSettingFrame, text="-")
+        
+        
 
         if os.path.exists(self.imageDirectory): #if img directory exist
             self.connectedImg = PhotoImage(file=self.imageDirectory+self.connected)
             self.disconnectedImg = PhotoImage(file=self.imageDirectory+self.disconnected)
+            self.refreshImg = PhotoImage(file=self.imageDirectory+self.refresh_pic).subsample(2, 2)
             self.comport_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
             self.pacemaker_connectionImgLabel = Label(self.TelemetryStatusFrame, image=self.disconnectedImg)
+            self.refresh_button.config(image=self.refreshImg, compound="left")
         
         #display labels
-        self.DCM_version_label.pack(pady=20)
-        self.TelemetryStatusTitle.grid(row=0, columnspan=3, sticky=N)
-        self.COM_Port_label.grid(row=1, column=1, pady=5)
-        self.Pacemaker_Connection_label.grid(row=2, column=1, pady=5)
-        self.Last_Program_Time_label.grid(row=3, column=1, pady=5)
-        self.Current_Pacing_Mode_label.grid(row=4, column=1, pady=5)
+        self.refresh_button.grid(row=3, columnspan=6)
+        self.DCM_version_label.pack(side=BOTTOM)
+        self.COM_Port_label.grid(row=1, column=1, pady=5, sticky=W)
+        self.Pacemaker_Connection_label.grid(row=1, column=4, pady=5, sticky=W)
+        self.Last_Program_Time_label.grid(row=2, column=1, pady=5)
+        self.Current_Pacing_Mode_label.grid(row=2, column=4, pady=5)
+        self.comport_description.grid(row=1, column=2, pady=5, padx=20, sticky=W)
+        self.pacemaker_description.grid(row=1, column=5, pady=5, sticky=W)
+        self.lastProgramTime_description.grid(row=2, column=2, pady=5, padx=20, sticky=W)
+        self.currentPacingMode_description.grid(row=2, column=5, pady=5, sticky=W)
+        self.comport_connectionImgLabel.grid(row=1, column=0, pady=5, sticky=W)
+        self.pacemaker_connectionImgLabel.grid(row=1, column=3, pady=5, sticky=E)
 
-        self.comport_description.grid(row=1, column=2, pady=5)
-        self.pacemaker_description.grid(row=2, column=2, pady=5)
-        self.lastProgramTime_description.grid(row=3, column=2, pady=5)
-        self.currentPacingMode_description.grid(row=4, column=2, pady=5)
-
-        self.comport_connectionImgLabel.grid(row=1, column=0, pady=5)
-        self.pacemaker_connectionImgLabel.grid(row=2, column=0, pady=5)
-
-##        self.refreshBoardInfo()
+        self.LowerRateLimit_label.grid(row=0, column=0)
+        self.LowerRateLimit_value.grid(row=0, column=1, padx=15)
+        self.UpperRateLimit_label.grid(row=1, column=0)
+        self.UpperRateLimit_value.grid(row=1, column=1, padx=15)
+        self.MaximumSensorRate_label.grid(row=2, column=0)
+        self.MaximumSensorRate_value.grid(row=2, column=1, padx=15)
+        self.FixedAVDelay_label.grid(row=3, column=0)
+        self.FixedAVDelay_value.grid(row=3, column=1, padx=15)
+        self.AtrialAmplitude_label.grid(row=4, column=0)
+        self.AtrialAmplitude_value.grid(row=4, column=1, padx=15)
+        self.VentricularAmplitude_label.grid(row=5, column=0)
+        self.VentricularAmplitude_value.grid(row=5, column=1, padx=15)
+        self.AtrialPulseWidth_label.grid(row=0, column=2)
+        self.AtrialPulseWidth_value.grid(row=0, column=3, padx=15)
+        self.VentricularPulseWidth_label.grid(row=1, column=2)
+        self.VentricularPulseWidth_value.grid(row=1, column=3, padx=15)
+        self.AtrialSensitivity_label.grid(row=2, column=2)
+        self.AtrialSensitivity_value.grid(row=2, column=3, padx=15)
+        self.VentricularSensitivity_label.grid(row=3, column=2)
+        self.VentricularSensitivity_value.grid(row=3, column=3, padx=15)
+        self.VRP_label.grid(row=4, column=2)
+        self.VRP_value.grid(row=4, column=3, padx=15)
+        self.ARP_label.grid(row=5, column=2)
+        self.ARP_value.grid(row=5, column=3, padx=15)
+        self.PVARP_label.grid(row=0, column=4)
+        self.PVARP_value.grid(row=0, column=5, padx=15)
+        self.ActivityThreshold_label.grid(row=1, column=4)
+        self.ActivityThreshold_value.grid(row=1, column=5, padx=15)
+        self.ReactionTime_label.grid(row=2, column=4)
+        self.ReactionTime_value.grid(row=2, column=5, padx=15)
+        self.ResponseFactor_label.grid(row=3, column=4)
+        self.ResponseFactor_value.grid(row=3, column=5, padx=15)
+        self.RecoveryTime_label.grid(row=4, column=4)
+        self.RecoveryTime_value.grid(row=4, column=5, padx=15)
 
     def refreshBoardInfo(self):
         if self.listValidComPort():
@@ -701,7 +823,7 @@ class appDCM:
 
             #get pacemaker parameters
             self.serialEchoParameter()
-            self.pacemakerMode = serialReadData()
+            self.pacemakerMode = self.serialReadData()
             
 ##        if something:
 ##            self.currentPacingMode_description.config(text="(This will state the current pacing mode)", fg='#4caf50')
